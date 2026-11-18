@@ -637,16 +637,15 @@ function allocHint(a) {
   tg.forEach(function (k) { tot += al[k]; });
   tg.forEach(function (k) {
     if (!al[k]) return;
-    if (k === 'radius' || k === 'other') parts.push(ALLOC_LABEL[k].toLowerCase() + ' ×' + fmt(1 + al[k] / U.stepAp * U.distancePercentPerStep / 100, 3) + ' от начального');
-    else parts.push(ALLOC_LABEL[k].toLowerCase() + ' +' + fmt(al[k] / U.stepAp * U.physPercentPerStep, 2) + '%');
+    parts.push(ALLOC_LABEL[k].toLowerCase() + ' ' + E.upgradeText(k, al[k], RULES));
   });
   return 'Вложено ' + fmt(tot, 0) + ' из ' + fmt(ap, 0) + ' AP' + (tot < ap ? ' · свободно ' + fmt(ap - tot, 0) : '') + (tot > ap ? ' · <b class="bad">больше, чем AP способности</b>' : '') + (parts.length ? ' — ' + parts.join(', ') : '');
 }
 function allocEditor(a, base, i) {
   var U = RULES.abilities.upgrade, tg = E.abilityTargets(a, RULES);
-  if (!tg.length) return '<div class="ab-alloc"><div class="hint">Вкладывать AP пока некуда: в описании нет чисел, которые зависят от статов или меняются от силы атрибута. Добавь метку <code>{speed 910%}</code> или число с единицей (<code>10 м</code>, <code>20 кг</code>); числа с замочком <code>{= …}</code> не прокачиваются.</div></div>';
-  var hasPhys = tg.some(function (k) { return k !== 'radius' && k !== 'other'; });
-  return '<div class="ab-alloc"><div class="hint">AP можно вложить только в то, что есть в описании: показатели из меток и числа, которые меняются от силы атрибута. Каждые ' + U.stepAp + ' AP = +' + U.physPercentPerStep + '% к показателю (баф 100% → ' + fmt(100 + U.physPercentPerStep, 0) + '%) или +' + U.distancePercentPerStep + '% к начальному числу. Можно делить: ' + fmt(U.stepAp / 4, 0) + ' AP на 4 показателя = +' + fmt(U.physPercentPerStep / 4, 1) + '% каждому.</div>' +
+  if (!tg.length) return '<div class="ab-alloc"><div class="hint">Вкладывать AP пока некуда: в описании нет чисел, которые зависят от статов или меняются от силы атрибута. Добавь метку <code>{speed 910%}</code>, эффект на цель <code>{дебафф 40%}</code>, температуру (<code>500 °C</code>, <code>-100 °C</code>) или число с единицей (<code>10 м</code>, <code>20 кг</code>); числа с замочком <code>{= …}</code> не прокачиваются.</div></div>';
+  var hasPhys = tg.some(function (k) { return k === 'punch' || k === 'speed' || k === 'durability'; });
+  return '<div class="ab-alloc"><div class="hint">AP можно вложить только в то, что есть в описании: показатели из меток и числа, которые меняются от силы атрибута. Каждые ' + U.stepAp + ' AP дают: +' + U.physPercentPerStep + '% к физическому показателю персонажа (баф 100% → ' + fmt(100 + U.physPercentPerStep, 0) + '%); +' + U.statusPercentPerStep + '% к бафу союзника или дебафу врага (<code>{бафф 40%}</code>, <code>{дебафф 40%}</code>); +' + U.heatPerStep + ' °C к максимальной температуре огня или −' + U.coldPerStep + ' °C для холода (<code>500 °C</code>, <code>-100 °C</code>); +' + U.distancePercentPerStep + '% к начальному числу (радиус, дальность). Можно делить: ' + fmt(U.stepAp / 4, 0) + ' AP на 4 показателя = +' + fmt(U.physPercentPerStep / 4, 1) + '% каждому.</div>' +
     '<div class="row4">' + tg.map(function (k) { return fld(ALLOC_LABEL[k] + ', AP', inp(base + 'alloc.' + k, a.alloc[k] || '', 'number', ' min="0" step="25"')); }).join('') + '</div>' +
     (hasPhys ? '<div class="row"><button type="button" class="mini-btn" data-spread="' + i + '" title="Раскидать свободные AP поровну на показатели из описания">⚖ свободные AP поровну на показатели</button></div>' : '') +
     '<div class="ab-alloc-hint">' + allocHint(a) + '</div></div>';
@@ -983,7 +982,7 @@ function allocEditor(a, base, i) {
         var used = 0; E.abilityTargets(SA, RULES).forEach(function (k) { used += SA.alloc[k]; });
         var free = (parseFloat(SA.ap) || 0) - used;
         if (free <= 0) { toast('Свободных AP нет'); return; }
-        var ph = E.abilityTargets(SA, RULES).filter(function (k) { return k !== 'radius' && k !== 'other'; });
+        var ph = E.abilityTargets(SA, RULES).filter(function (k) { return k === 'punch' || k === 'speed' || k === 'durability'; });
         if (!ph.length) { toast('В описании нет показателей-меток'); return; }
         ph.forEach(function (k) { SA.alloc[k] = Math.round((SA.alloc[k] + free / ph.length) * 100) / 100; });
         renderEditor(); return;

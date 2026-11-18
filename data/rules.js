@@ -162,7 +162,11 @@
   "abilities": {
     "max": 12,
     "maxImages": 6,
-    "upgrade": { "stepAp": 100, "physPercentPerStep": 30, "distancePercentPerStep": 15 },
+    "upgrade": { "stepAp": 100, "physPercentPerStep": 30, "statusPercentPerStep": 20, "distancePercentPerStep": 15, "heatPerStep": 50, "coldPerStep": 20 },
+    "effects": {
+      "buff":   { "label": "Бафф союзника", "aliases": ["бафф", "баф", "buff", "союзник", "усиление"] },
+      "debuff": { "label": "Дебафф врага",  "aliases": ["дебафф", "дебаф", "debuff", "враг", "ослабление"] }
+    },
     "scaleUnits": [
       { "pattern": "км/ч|м/с", "scope": "speed" },
       { "pattern": "км|метр[а-яё]*|м|см|мм", "scope": "radius" },

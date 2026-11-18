@@ -411,5 +411,28 @@ test('цикл родителей не зависает', () => {
   const c = withAb(clone(KENOS), [{ id: 'a', name: 'A', parentId: 'b', description: '{punch 1}' }, { id: 'b', name: 'B', parentId: 'a', description: '{punch 1}' }]);
   assert.ok(abil(c, 'base').length >= 1);
 });
+section('Эффекты на цель и температура');
+test('дебафф врага: 40% + 100 AP = 60% (+20% за 100 AP), множитель ÷1.6', () => {
+  const m = upg('Цель получает {дебафф 40%}.', { status: 100 }, 100);
+  const l = m.lines[0]; assert.strictEqual(l.effect, 'debuff'); near(l.percentNow, 60, 1e-9); near(l.factorNow, 1.6, 1e-9);
+  assert.ok(m.targets.includes('status'));
+});
+test('бафф союзника тоже +20% за 100 AP; сила атрибута на него не влияет', () => {
+  const m = upg('{бафф 30%}', { status: 200 }, 200); near(m.lines[0].percentNow, 70, 1e-9);
+});
+test('нагрев: 500 °C + 100 AP = 550 °C; холод: -100 °C + 100 AP = -120 °C', () => {
+  const m = upg('До 500 °C, холод -100 °C.', { heat: 100, cold: 100 }, 200);
+  assert.strictEqual(m.temps.length, 2); near(m.temps[0].value, 550, 1e-9); near(m.temps[1].value, -120, 1e-9);
+  assert.deepStrictEqual(m.targets.filter(k => k === 'heat' || k === 'cold'), ['heat', 'cold']);
+});
+test('диапазон «10–20 °C» не считается одной температурой', () => {
+  const m = upg('Температура 10–20 °C.', {}, 0); assert.strictEqual(m.temps.length, 0);
+});
+test('замочек {= 500 °C} оставляет температуру нетронутой', () => {
+  const m = upg('{= 500 °C}', { heat: 100 }, 100); assert.strictEqual(m.temps.length, 0);
+});
+test('AP нельзя вложить в температуру, которой нет в тексте', () => {
+  const m = upg('Просто текст', { heat: 100 }, 100); assert.strictEqual(m.alloc.heat, 0);
+});
 console.log('\n' + (failed ? '✗ ПРОВАЛЕНО: ' + failed + ', ' : '') + 'пройдено: ' + passed + ' из ' + (passed + failed));
 process.exit(failed ? 1 : 0);

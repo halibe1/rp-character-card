@@ -325,16 +325,17 @@
    *   100% при силе атрибута ×3 → 300% (×4). Бафф атрибута ×2 и способность ×2 = ×4; при силе ×3 оба ×4 → ×16.
    * В подспособности: значение = такой же стат родителя × k (сила атрибута уже учтена в родителе).
    */
-  function parseAbilityText(text, defs) {
-    var map = {};
+  function parseAbilityText(text, defs, effects) {
+    var map = {}, eff = {};
     Object.keys(defs).forEach(function (k) { [k].concat(defs[k].aliases || []).forEach(function (al) { map[al.toLowerCase()] = k; }); });
+    Object.keys(effects || {}).forEach(function (k) { [k].concat(effects[k].aliases || []).forEach(function (al) { eff[al.toLowerCase()] = k; }); });
     var re = /\{\s*([^{}\d]+?)[\s:=]+([xх×])?\s*(\d+(?:[.,]\d+)?)\s*(%)?\s*\}/gi, segs = [], last = 0, m;
     text = String(text || '');
     while ((m = re.exec(text)) !== null) {
-      var key = map[m[1].trim().toLowerCase()];
-      if (!key) continue;
+      var nm0 = m[1].trim().toLowerCase(), key = map[nm0], effKind = key ? null : eff[nm0];
+      if (!key && !effKind) continue;
       if (m.index > last) segs.push({ text: text.slice(last, m.index) });
-      segs.push({ token: { key: key, num: parseFloat(m[3].replace(',', '.')), mark: m[2] ? 'x' : (m[4] ? '%' : ''), src: m[0] } });
+      segs.push({ token: { key: effKind ? 'status' : key, effect: effKind || '', num: parseFloat(m[3].replace(',', '.')), mark: m[2] ? 'x' : (m[4] ? '%' : ''), src: m[0] } });
       last = re.lastIndex;
     }
     if (last < text.length) segs.push({ text: text.slice(last) });
@@ -357,16 +358,33 @@
    * Куда можно вложить AP в способности: показатели из меток ({speed …}, {punch …}), «радиус» — если в тексте есть
    * масштабируемые числа-расстояния, «other» — прочие масштабируемые числа (кг, км/ч, {~ …}). Числа с замочком {= …} не считаются.
    */
+  var ALLOC_ORDER = ['punch', 'speed', 'durability', 'status', 'radius', 'other', 'heat', 'cold'];
+  /** Что даёт вложение AP в показатель: число (процентные пункты, множитель или градусы). */
+  function upgradeGain(key, ap, rules) {
+    var u = rules.abilities.upgrade, s = (ap || 0) / u.stepAp;
+    if (key === 'status') return s * u.statusPercentPerStep;
+    if (key === 'heat') return s * u.heatPerStep;
+    if (key === 'cold') return s * u.coldPerStep;
+    if (key === 'radius' || key === 'other') return s * u.distancePercentPerStep;
+    return s * u.physPercentPerStep;
+  }
+  function upgradeText(key, ap, rules) {
+    var g = upgradeGain(key, ap, rules);
+    if (key === 'heat') return '+' + n(g, 1) + ' °C';
+    if (key === 'cold') return '−' + n(g, 1) + ' °C';
+    if (key === 'radius' || key === 'other') return '×' + n(1 + g / 100, 3) + ' от начального';
+    return '+' + n(g, 2) + '%';
+  }
   function abilityTargets(text, rules) {
     if (text && typeof text === 'object') text = [text.description].concat(text.pros || [], text.cons || []).join('\n');
     var defs = rules.abilities.stats, keys = [], dummy = { base: 100, scopes: {} };
     Object.keys(rules.scopes).forEach(function (sc) { dummy.scopes[sc] = { value: 100 }; });
     function add(k) { if (keys.indexOf(k) === -1) keys.push(k); }
-    parseAbilityText(text, defs).forEach(function (s) {
+    parseAbilityText(text, defs, rules.abilities.effects).forEach(function (s) {
       if (s.token) { add(s.token.key); return; }
-      expandPlain(s.text, dummy, rules, {}).forEach(function (x) { if (x.scaled) add(x.scaled.scope === 'radius' ? 'radius' : 'other'); });
+      expandPlain(s.text, dummy, rules, {}).forEach(function (x) { if (x.scaled) add(x.scaled.scope === 'radius' ? 'radius' : 'other'); if (x.temp) add(x.temp.key); });
     });
-    var order = ['punch', 'speed', 'durability', 'radius', 'other'];
+    var order = ALLOC_ORDER;
     return order.filter(function (k) { return keys.indexOf(k) !== -1; });
   }
   function scaledSeg(numStr, suffix, scope, power, rules, forced, alloc) {
@@ -379,7 +397,31 @@
   function expandPlain(text, power, rules, alloc) {
     var units = (rules.abilities.scaleUnits || []), out = [];
     var auto = units.length ? new RegExp('(\\d+(?:[.,]\\d+)?)(\\s*)(' + units.map(function (u) { return u.pattern; }).join('|') + ')(?![а-яёa-z0-9/])', 'gi') : null;
+    function tempSeg(sign, numStr, gap, suffix) {
+      var num = parseFloat(String(numStr).replace(',', '.')), cold = sign === '-', U = rules.abilities.upgrade;
+      var key = cold ? 'cold' : 'heat', ap = alloc ? alloc[key] || 0 : 0, gain = upgradeGain(key, ap, rules);
+      var value = cold ? -num - gain : num + gain;
+      return { temp: { key: key, num: cold ? -num : num, plus: sign === '+', suffix: gap + suffix, value: value, allocAp: ap, gain: gain,
+        formula: (cold ? '−' + n(num, 2) : n(num, 2)) + (gain ? (cold ? ' − ' : ' + ') + n(gain, 2) + ' (прокачка: ' + n(ap, 0) + ' AP × ' + (cold ? U.coldPerStep : U.heatPerStep) + ' °C / ' + U.stepAp + ' AP)' : '') + ' = ' + n(value, 2) + ' °C' } };
+    }
+    var tempRe = /([+\-−–]?)(\d+(?:[.,]\d+)?)(\s*)(°\s?[CС]?|градус[а-яё]*(?:\s+Цельсия)?)/gi;
     function plain(chunk) {
+      if (!chunk) return;
+      if (/°|градус/i.test(chunk)) {
+        var tl = 0, tm; tempRe.lastIndex = 0;
+        while ((tm = tempRe.exec(chunk)) !== null) {
+          var sg = tm[1] === '−' || tm[1] === '–' ? '-' : tm[1], cut = tm.index;
+          if (sg && /\d\s*$/.test(chunk.slice(0, tm.index))) continue;   // диапазон «10–20 °C»: не меняем, это не одна температура
+          plainUnits(chunk.slice(tl, cut));
+          out.push(tempSeg(sg, tm[2], tm[3], tm[4]));
+          tl = tempRe.lastIndex;
+        }
+        plainUnits(chunk.slice(tl));
+        return;
+      }
+      plainUnits(chunk);
+    }
+    function plainUnits(chunk) {
       if (!chunk) return;
       if (!auto) { out.push({ text: chunk }); return; }
       var last = 0, m; auto.lastIndex = 0;
@@ -419,10 +461,19 @@
       var parent = a.parentId && a.parentId !== a.id && byId[a.parentId] ? build(byId[a.parentId]) : null;
       var lines = [], U = rules.abilities.upgrade;
       var targets = abilityTargets(a, rules), alloc = {};
-      ['punch', 'speed', 'durability', 'radius', 'other'].forEach(function (k) { var v = a.alloc ? parseFloat(a.alloc[k]) : 0; alloc[k] = targets.indexOf(k) !== -1 && isFinite(v) && v > 0 ? v : 0; });
-      function segsFor(text) { var raw = parseAbilityText(text, defs).map(function (s) {
+      ALLOC_ORDER.forEach(function (k) { var v = a.alloc ? parseFloat(a.alloc[k]) : 0; alloc[k] = targets.indexOf(k) !== -1 && isFinite(v) && v > 0 ? v : 0; });
+      var temps = [];
+      function segsFor(text) { var raw = parseAbilityText(text, defs, rules.abilities.effects).map(function (s) {
         if (!s.token) return s;
-        var tk = s.token, def = defs[tk.key], line = { key: tk.key, label: def.label, unit: def.unit, src: tk.src };
+        var tk = s.token;
+        if (tk.effect) {
+          var ef = rules.abilities.effects[tk.effect], pe = tk.mark === 'x' ? (tk.num - 1) * 100 : tk.num, bp = upgradeGain('status', alloc.status, rules), pn = pe + bp;
+          var el = { key: 'status', kind: 'effect', effect: tk.effect, label: ef.label, unit: '%', src: tk.src, percent: pe, bonusPp: bp, allocAp: alloc.status, percentNow: pn, factorNow: 1 + pn / 100, factor: 1 + pe / 100, value: pn,
+            formula: n(pe, 1) + '%' + (bp ? ' + ' + n(bp, 2) + '% (прокачка: ' + n(alloc.status, 0) + ' AP × ' + U.statusPercentPerStep + '% / ' + U.stepAp + ' AP)' : '') + ' = ' + n(pn, 1) + '% (' + (tk.effect === 'debuff' ? '÷' : '×') + n(1 + pn / 100, 2) + ')' };
+          lines.push(el);
+          return { line: el };
+        }
+        var def = defs[tk.key], line = { key: tk.key, label: def.label, unit: def.unit, src: tk.src };
         if (parent) {
           var pl = parent.lines.filter(function (l) { return l.key === tk.key; })[0];
           if (!pl) return { text: tk.src, missing: true };
@@ -446,13 +497,13 @@
         lines.push(line);
         return { line: line };
       });
-      return [].concat.apply([], raw.map(function (s) { return s.text !== undefined && !s.missing ? expandPlain(s.text, power, rules, alloc) : [s]; })); }
+      return [].concat.apply([], raw.map(function (s) { return s.text !== undefined && !s.missing ? expandPlain(s.text, power, rules, alloc) : [s]; })).map(function (x) { if (x.temp) temps.push(x.temp); return x; }); }
       var segments = segsFor(a.description);
       var strs = function (v) { return (Array.isArray(v) ? v : []).map(function (x) { return String(x == null ? '' : x).trim(); }).filter(Boolean); };
       var prosSegs = strs(a.pros).map(segsFor), consSegs = strs(a.cons).map(segsFor);
       var fixed = !!a.fixedCost;
       var res = { id: a.id, name: a.name || '', description: a.description || '', ap: num(a.ap, 0), parentId: parent ? a.parentId : '', parentName: parent ? parent.name : '',
-        entry: num(a.entryCost, null), upkeep: num(a.upkeepCost, null), upkeepNote: a.upkeepNote || '', fixedCost: fixed, segments: segments, pros: prosSegs, cons: consSegs, lines: lines,
+        entry: num(a.entryCost, null), upkeep: num(a.upkeepCost, null), upkeepNote: a.upkeepNote || '', fixedCost: fixed, segments: segments, pros: prosSegs, cons: consSegs, lines: lines, temps: temps,
         images: (Array.isArray(a.images) ? a.images : []).filter(function (u) { return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u); }).slice(0, rules.abilities.maxImages || 6) };
       var total = 0; Object.keys(alloc).forEach(function (k) { total += alloc[k]; });
       res.alloc = alloc; res.targets = targets; res.allocTotal = total; res.allocFree = res.ap - total; res.upgradeSteps = Math.floor(res.ap / U.stepAp);
@@ -571,7 +622,7 @@
     pressure: pressure, waterRun: waterRun, reactionCheck: reactionCheck, structureCast: structureCast,
     attributeEndurance: attributeEndurance, staminaRecovery: staminaRecovery, woundsAgainst: woundsAgainst,
     erosion: erosion, martialProgress: martialProgress, apProgress: apProgress,
-    parseAbilityText: parseAbilityText, kmhToMs: kmhToMs, msToKmh: msToKmh, PHYS: PHYS, ALL: ALL
+    parseAbilityText: parseAbilityText, upgradeGain: upgradeGain, upgradeText: upgradeText, ALLOC_ORDER: ALLOC_ORDER, kmhToMs: kmhToMs, msToKmh: msToKmh, PHYS: PHYS, ALL: ALL
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RPEngine = api;

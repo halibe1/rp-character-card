@@ -927,3 +927,11 @@ body.is-capturing { cursor: progress; }
 .wel-steps code { color: var(--a3); }
 .wel-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 @media (max-width: 900px) { .wel-actions .mini-btn { flex: 1 1 100%; min-height: 44px; } }
+
+/* ---------- эффекты на цель и температура ---------- */
+.ab-eff { border-color: rgba(232, 121, 249, .4); }
+.ab-eff.deb .ab-mul { color: var(--hot); }
+.ab-temp { border-bottom: 1px dotted var(--a3); }
+.ab-temp.heat { color: #f5d0fe; text-shadow: 0 0 10px rgba(232, 121, 249, .55); }
+.ab-temp.cold { color: #ddd6fe; text-shadow: 0 0 10px rgba(167, 139, 250, .6); }
+#welcome .modal-box { height: auto; }

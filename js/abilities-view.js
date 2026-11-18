@@ -10,14 +10,17 @@
     var R = ctx.R, ch = ctx.ch, view = ctx.view, canEdit = ctx.canEdit, abOpen = ctx.abOpen;
     var list = R.derived.abilities, pw = R.derived.mods.attrPower;
     function pctTxt(v) { return fmt(v, v % 1 ? 1 : 0) + '%'; }
-    var UPG_KEYS = [['radius', 'Радиус / дальность'], ['other', 'Прочие числа'], ['punch', 'Сила удара'], ['speed', 'Скорость'], ['durability', 'Прочность']];
+    var UPG_KEYS = [['radius', 'Радиус / дальность'], ['other', 'Прочие числа'], ['punch', 'Сила удара'], ['speed', 'Скорость'], ['durability', 'Прочность'], ['status', 'Эффект на цель'], ['heat', 'Нагрев, °C'], ['cold', 'Охлаждение, °C']];
+    var EXTRA = { status: 1, heat: 1, cold: 1 };
+    function gainTxt(key, ap) { return window.RPEngine.upgradeText(key, ap, RULES); }
     function mulTxt(f, pctVal) { return '×' + fmt(f, 2) + (pctVal === undefined ? '' : '<small>(' + pctTxt(pctVal) + ')</small>'); }
     /** Сколько AP вложено в каждый показатель способности и как изменился множитель (было → стало). */
     function allocBlock(a, mark) {
       if ((!a.ap && !a.allocTotal) || !a.targets.length) return '';
       var U = RULES.abilities.upgrade, rows = UPG_KEYS.filter(function (kv) { return a.targets.indexOf(kv[0]) !== -1; }).map(function (kv) {
         var key = kv[0], ap = a.alloc[key] || 0, l = a.lines.filter(function (x) { return x.key === key; })[0], eff = '';
-        if (key === 'radius' || key === 'other') eff = mulTxt(1) + ' → ' + mulTxt(1 + ap / U.stepAp * U.distancePercentPerStep / 100) + ' (+' + fmt(ap / U.stepAp * U.distancePercentPerStep, 1) + '% от начального)';
+        if (EXTRA[key]) eff = gainTxt(key, ap) + (key === 'status' ? ' к проценту бафа / дебафа' : ' к максимуму');
+        else if (key === 'radius' || key === 'other') eff = mulTxt(1) + ' → ' + mulTxt(1 + ap / U.stepAp * U.distancePercentPerStep / 100) + ' (+' + fmt(ap / U.stepAp * U.distancePercentPerStep, 1) + '% от начального)';
         else if (l && l.child) eff = mulTxt(l.k0) + ' → ' + mulTxt(l.k) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
         else if (l) eff = mulTxt(l.factor, l.percent) + ' → ' + mulTxt(l.factorNow, l.percentNow) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
         else if (ap) eff = '+' + fmt(ap / U.stepAp * U.physPercentPerStep, 1) + '% (в описании нет метки)';
@@ -25,7 +28,13 @@
       }).join('');
       return '<div class="upg"><div class="upg-h">Вложено в способность: ' + fmt(a.allocTotal, 0) + ' из ' + fmt(a.ap, 0) + ' AP' + (a.allocFree > 0 ? ' · свободно ' + fmt(a.allocFree, 0) : '') + (a.allocFree < 0 ? ' · <em>вложено больше, чем AP способности</em>' : '') + '</div>' + rows + '</div>';
     }
+    function effHtml(l, a) {
+      var deb = l.effect === 'debuff', up = l.bonusPp > 0, mark = deb ? '÷' : '×';
+      var extra = (deb ? 'Дебафф врага: его характеристика делится на ' : 'Бафф союзника: его характеристика умножается на ') + '<b>' + fmt(l.factorNow, 2) + '</b>. Сила атрибута и статы персонажа на этот процент не влияют.' + (up ? '<br>Изначально ' + fmt(l.percent, 1) + '%, с прокачкой (' + fmt(l.allocAp, 0) + ' AP): ' + fmt(l.percentNow, 1) + '%.' : '') + allocBlock(a, 'status');
+      return '<span class="ab-num ab-eff' + (deb ? ' deb' : '') + '"' + tipAttr(l.label, l.formula, extra) + '>' + fmt(l.percentNow, l.percentNow % 1 ? 1 : 0) + '%' + (up ? '<span class="ab-up" title="прокачано">▲</span>' : '') + '<span class="ab-mul">' + mark + fmt(l.factorNow, 2) + '</span></span>';
+    }
     function numHtml(l, a) {
+      if (l.kind === 'effect') return effHtml(l, a);
       var val = fmt(l.value, l.key === 'speed' ? 1 : 0) + ' ' + esc(l.unit);
       var body, extra;
       if (l.child) {
@@ -53,6 +62,11 @@
     function segHtml(segments, a) {
       return segments.map(function (s) {
         if (s.line) return numHtml(s.line, a);
+        if (s.temp) {
+          var tp = s.temp, cold = tp.key === 'cold', shown = (tp.plus && tp.value >= 0 ? '+' : '') + fmt(tp.value, Math.abs(tp.value - Math.round(tp.value)) < 1e-9 ? 0 : 1).replace('-', '−') + tp.suffix;
+          if (!tp.gain) return esc((tp.plus ? '+' : '') + fmt(tp.num, tp.num % 1 ? 1 : 0).replace('-', '−') + tp.suffix);
+          return '<span class="ab-sc ab-temp ' + tp.key + '"' + tipAttr(cold ? 'Охлаждение' : 'Нагрев', tp.formula, 'Было ' + fmt(tp.num, 1) + ' °C. ' + (cold ? 'Каждые ' + RULES.abilities.upgrade.stepAp + ' AP понижают температуру на ' + RULES.abilities.upgrade.coldPerStep + ' °C.' : 'Каждые ' + RULES.abilities.upgrade.stepAp + ' AP повышают максимальную температуру на ' + RULES.abilities.upgrade.heatPerStep + ' °C.') + allocBlock(a, tp.key)) + '>' + esc(shown) + '<span class="ab-up" title="прокачано">▲</span></span>';
+        }
         if (s.fixed !== undefined) return '<span class="ab-fix"' + tipAttr('Не меняется', null, 'Это число помечено исключением: сила атрибута его не увеличивает.') + '>' + esc(s.fixed) + '</span>';
         if (s.scaled) {
           var c = s.scaled, shown = fmt(c.value, Math.abs(c.value - Math.round(c.value)) < 1e-9 ? 0 : 2);
@@ -66,7 +80,8 @@
       if ((!a.ap && !a.allocTotal) || !a.targets.length) return '';
       var parts = UPG_KEYS.filter(function (kv) { return a.alloc[kv[0]] > 0; }).map(function (kv) {
         var key = kv[0], l = a.lines.filter(function (x) { return x.key === key; })[0], U = RULES.abilities.upgrade, eff;
-        if (key === 'radius' || key === 'other') eff = '×' + fmt(1 + a.alloc[key] / U.stepAp * U.distancePercentPerStep / 100, 2);
+        if (EXTRA[key]) eff = gainTxt(key, a.alloc[key]);
+        else if (key === 'radius' || key === 'other') eff = '×' + fmt(1 + a.alloc[key] / U.stepAp * U.distancePercentPerStep / 100, 2);
         else if (l && l.child) eff = '×' + fmt(l.k0, 2) + ' → ×' + fmt(l.k, 2);
         else if (l) eff = '×' + fmt(l.factor, 2) + ' → ×' + fmt(l.factorNow, 2);
         else eff = '+' + fmt(a.alloc[key] / U.stepAp * U.physPercentPerStep, 1) + '%';
