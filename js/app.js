@@ -835,6 +835,19 @@ function allocEditor(a, base, i) {
     }).catch(function (err) { toast('Не удалось сохранить: ' + err.message); });
   }
 
+  /** Резервная копия: все персонажи пользователя одним файлом (тот же формат читает «Загрузить»). */
+  function exportAll() {
+    var list = chars.filter(function (c) { return !Remote || c.ownerId; }).map(function (c) { var x = clone(c); delete x.ownerId; delete x.ownerName; return x; });
+    if (!list.length) { toast('Нечего скачивать'); return; }
+    var blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a'), d = new Date();
+    a.href = URL.createObjectURL(blob);
+    a.download = 'rp-characters-' + d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    toast('Скачано персонажей: ' + list.length);
+  }
+
   function exportCharacter() {
     var c = cleanDraft(draft);
     var blob = new Blob([JSON.stringify(c, null, 2)], { type: 'application/json' });
@@ -974,6 +987,10 @@ function allocEditor(a, base, i) {
     $('#editorForm').addEventListener('submit', saveEditor);
     $('#editor').addEventListener('click', function (e) { if (e.target.closest('[data-eclose]')) closeEditor(); });
     $('#btnExport').addEventListener('click', exportCharacter);
+    $('#btnBackup').addEventListener('click', exportAll);
+    $('#restoreFile').addEventListener('change', function () { if (this.files[0]) importCharacters(this.files[0]); this.value = ''; });
+    // просим браузер не вычищать данные при нехватке места
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ок */ }
     $('#importFile').addEventListener('change', function () { if (this.files[0]) importCharacters(this.files[0]); this.value = ''; });
     $('#btnDelete').addEventListener('click', deleteCharacter);
   }
