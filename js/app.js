@@ -744,13 +744,26 @@ function allocEditor(a, base, i) {
           '<button type="button" class="x" data-del="traits.' + i + '" aria-label="Удалить">✕</button></div>';
       }).join('') : '<div class="empty-note">Нет трейтов.</div>') +
       '<button type="button" class="mini-btn add" data-add="traits"' + (nTraits >= RULES.maxTraits ? ' disabled' : '') + '>' + (nTraits >= RULES.maxTraits ? 'максимум ' + RULES.maxTraits : '+ трейт') + '</button></section>' +
-      '<section class="ed-sec ed-wide"><h3>Способности атрибута</h3><div class="sub">Описание пиши текстом, а число стата вставляй меткой: <code>{speed 910%}</code>, <code>{durability 280%}</code>, <code>{punch 910%}</code> (можно <code>x10.1</code>, по-русски <code>{скорость 910%}</code>). На экране метка превратится в <b>×10,1 (910%) → готовое значение</b>, посчитанное от текущих статов; сила атрибута усиливает процент. В подспособности метка — множитель от стата родителя: <code>{punch 0.5}</code> = половина. Остальные числа с единицами (<code>1 метр</code>, <code>15 м</code>, <code>20 кг</code>, <code>50 км/ч</code>) растут от силы атрибута сами; выдели число и нажми «🔒 не меняется» (оно обернётся в <code>{= 15 м}</code>), если оно не должно расти. «⚖ масштабировать» (<code>{~ 15 лучей}</code>) включает рост для числа без единицы. Не фиксированные траты снижаются каждые 100 AP (общих AP персонажа) на 5% от изначальных: изначально ≥10% — не ниже 5%, ≤5% — не ниже 0.5%.</div>' + abilityRows() + '</section>' +
+      '<section class="ed-sec ed-wide"><h3>Способности атрибута</h3><div class="sub">Описание пиши текстом, а число стата вставляй меткой: <code>{speed 910%}</code>, <code>{durability 280%}</code>, <code>{punch 910%}</code> (можно <code>x10.1</code>, по-русски <code>{скорость 910%}</code>). На экране метка превратится в <b>×10,1 (910%) → готовое значение</b>, посчитанное от текущих статов; сила атрибута усиливает процент. В подспособности метка — множитель от стата родителя: <code>{punch 0.5}</code> = половина. Остальные числа с единицами (<code>1 метр</code>, <code>15 м</code>, <code>20 кг</code>, <code>50 км/ч</code>) растут от силы атрибута сами; выдели число и нажми «🔒 не меняется» (оно обернётся в <code>{= 15 м}</code>), если оно не должно расти. «⚖ масштабировать» (<code>{~ 15 лучей}</code>) включает рост для числа без единицы. Не фиксированные траты снижаются каждые 100 AP (общих AP персонажа) на 5% от изначальных: изначально ≥10% — не ниже 5%, ≤5% — не ниже 0.5%.</div>' + '<div class="ab-split"><div class="ab-form">' + abilityRows() + '</div><aside class="ab-prev"><div class="ab-prev-h">Предпросмотр <small>как на вкладке «Способности»</small></div><div id="abPrev"></div></aside></div></section>' +
       // бафы
       '<section class="ed-sec ed-wide"><h3>Пассивные бафы</h3><div class="sub">Действуют постоянно. Слой: <b>внутренний</b> — от самого персонажа, <b>внешний</b> — от других (саппорты, враги, аномалии). Дебафф делит. Источник нужен только для предела (артефакт и внешний слой могут его превысить). Аспект — для силы атрибута и боевого искусства. Галочка справа — бонус включён.</div>' + buffRows('passive') + '</section>' +
       '<section class="ed-sec ed-wide"><h3>Активные бафы</h3><div class="sub">Включаются в бою. Те же поля; процент всегда положительный, направление задаёт «баф / дебафф».</div>' + buffRows('active') + '</section>' +
       '</div>';
     body.scrollTop = keep;
+    updatePreview();
   }
+  /** Живой предпросмотр способностей: считается из черновика в текущем режиме статов. */
+  var prevTimer = 0;
+  function updatePreview() {
+    var box = $('#abPrev'); if (!box || !draft) return;
+    try {
+      var c = cleanDraft(draft), open = {};
+      c.abilities.forEach(function (a) { open[c.id + ':' + a.id] = true; });
+      var Rp = E.compute(c, RULES, { mode: view.mode, wounds: [], testBuff: null });
+      box.innerHTML = c.abilities.length ? AbView.render({ R: Rp, ch: c, view: view, canEdit: function () { return false; }, abOpen: open }) : '<div class="empty-note">Способностей пока нет.</div>';
+    } catch (err) { box.innerHTML = '<div class="empty-note">Предпросмотр недоступен: ' + esc(err.message) + '</div>'; }
+  }
+  function schedulePreview() { clearTimeout(prevTimer); prevTimer = setTimeout(updatePreview, 150); }
 
   function setPath(obj, path, value) {
     var parts = path.split('.'), o = obj;
@@ -878,6 +891,7 @@ function allocEditor(a, base, i) {
       setPath(draft, p, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
       var am = /^abilities\.(\d+)\.(ap|alloc\.)/.exec(p);
       if (am && draft.abilities[+am[1]]) { var hint = e.target.closest('.ab-edit').querySelector('.ab-alloc-hint'); if (hint) hint.innerHTML = allocHint(draft.abilities[+am[1]]); }
+      if (/^(abilities|attribute|stats|buffs|awakenings|ap|weightKg)/.test(p)) schedulePreview();
       if (p === 'name') $('#editorTitle').textContent = (editingNew ? 'Новый персонаж · ' : 'Персонаж · ') + e.target.value;
     });
     body.addEventListener('toggle', function (e) {
