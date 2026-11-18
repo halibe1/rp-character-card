@@ -890,21 +890,10 @@ body.is-capturing { cursor: progress; }
 .xp-full .right .dmore { grid-column: 1 / -1; }
 .xp-full .dcell.hero .dv { font-size: 30px; }
 
-/* ---------- редактор: предпросмотр способностей ---------- */
-.ab-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: var(--sp-4); align-items: start; }
-.ab-form { min-width: 0; }
-.ab-prev { position: sticky; top: 0; max-height: calc(100vh - 140px); overflow: auto; padding: var(--sp-3); border: 1px dashed var(--line-strong); border-radius: var(--r-md); background: var(--surface-1); }
-.ab-prev-h { margin-bottom: var(--sp-3); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--a3); }
-.ab-prev-h small { margin-left: 6px; letter-spacing: 0; text-transform: none; color: var(--text-3); }
-.ab-prev .ab-bar, .ab-prev [data-ab-all], .ab-prev .ab-lead, .ab-prev .ab-help { display: none; }
-.ab-prev .abx-head { flex-wrap: wrap; }
-@media (max-width: 1100px) { .ab-split { grid-template-columns: minmax(0, 1fr); } .ab-prev { position: static; max-height: none; } }
-
 /* ---------- телефон: высота с учётом адресной строки Chrome, кнопки сохранения всегда на виду ---------- */
 @supports (height: 100dvh) {
   body, .app { min-height: 100dvh; }
   .modal-box { max-height: calc(100dvh - 40px); }
-  .ab-prev { max-height: calc(100dvh - 140px); }
 }
 @media (max-width: 900px) {
   .modal-box { max-height: 100vh; height: 100vh; }
