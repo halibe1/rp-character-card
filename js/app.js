@@ -11,42 +11,17 @@
   var RULES = DATA.rules;
   var SEED = DATA.characters || [];
   var E = window.RPEngine;
+  var Util = window.RPUtil, $ = Util.$, $$ = Util.$$, fmt = Util.fmt, esc = Util.esc, tipAttr = Util.tipAttr, clone = Util.clone, toast = Util.toast, cap = Util.cap, ICON = Util.ICON;
+  var Model = window.RPModel, blankCharacter = Model.blankCharacter, normalize = Model.normalize, upgradeBuff = Model.upgradeBuff, normAbility = Model.normAbility, normList = Model.normList,
+    normAlloc = Model.normAlloc, ALLOC_KEYS = Model.ALLOC_KEYS, ALLOC_LABEL = Model.ALLOC_LABEL, makeBuffId = Model.makeBuffId, makeId = Model.makeId, cleanDraft = Model.cleanDraft;
+  var LocalStore = window.RPLocalStore, AbView = window.RPAbilitiesView;
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  var $ = function (s, r) { return (r || document).querySelector(s); };
-  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 
   /* ================= форматирование ================= */
 
-  function fmt(v, d) {
-    if (v === null || v === undefined || !isFinite(v)) return '—';
-    d = d === undefined ? 1 : d;
-    var p = Math.pow(10, d), x = Math.round(v * p) / p, neg = x < 0;
-    x = Math.abs(x);
-    var parts = x.toFixed(d).split('.');
-    var int = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-    var dec = parts[1] && /[1-9]/.test(parts[1]) ? ',' + parts[1].replace(/0+$/, '') : '';
-    return (neg ? '−' : '') + int + dec;
-  }
-  function esc(s) {
-    return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
-  }
-  function tipAttr(title, formula, extra) {
-    var h = '';
-    if (title) h += '<div class="tt-title">' + esc(title) + '</div>';
-    if (extra) h += '<div>' + extra + '</div>';
-    if (formula) h += '<div class="tt-f">' + esc(formula) + '</div>';
-    return ' data-tip="' + esc(h) + '"';
-  }
-  function clone(o) { return JSON.parse(JSON.stringify(o)); }
-  function toast(msg) {
-    var t = $('#toast'); t.textContent = msg; t.hidden = false;
-    clearTimeout(t._h); t._h = setTimeout(function () { t.hidden = true; }, 2600);
-  }
-
   /* названия параметров для подписей бонусов; заполняется в start() */
   var STAT_LABEL = { all: 'Все физические' };
-  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
 
   /**
    * Цепочка расчёта для тултипа:
@@ -81,75 +56,7 @@
 
   /* ================= иконки ================= */
 
-  var ICON = {
-    punch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 10V7a2 2 0 0 1 4 0v3M10 9V6a2 2 0 0 1 4 0v4M14 9.5V7a2 2 0 0 1 4 0v6c0 4-2.5 7-6.5 7S5 17.5 5 14v-3a1.5 1.5 0 0 1 3 0"/><path d="M9 14h4"/></svg>',
-    lift: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 12h20M5 8v8M8 6v12M16 6v12M19 8v8"/></svg>',
-    speed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
-    reaction: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3.2"/></svg>',
-    stamina: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 21s-7.5-4.6-9.3-9.6C1.5 7.8 4 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.7 1.1-1.6 2.7-2.7 4.7-2.7 3.3 0 5.8 3.3 4.6 6.9C19.5 16.4 12 21 12 21z"/><path d="M6 12h3l1.5-2.5 2 5L14 12h4"/></svg>',
-    hand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 11V8a2 2 0 0 1 4 0v2M9 9V7a2 2 0 0 1 4 0v3M13 9a2 2 0 0 1 4 0v4c0 4-2.5 7-6 7s-6-3-6-6.5v-1.5"/></svg>',
-    kick: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M8 3v8l-3 8h4l3-6 8 2v-4l-7-3V3z"/></svg>',
-    pierce: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 21 14 10M14 10l7-7-2 6-5 1z"/><path d="M6 15l3 3"/></svg>',
-    slashPalm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 18 18 4"/><path d="M7 20 20 7" opacity=".55"/><path d="M3 13 13 3" opacity=".3"/></svg>',
-    slashBlade: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M20 3 8 15l2 2L21 6z"/><path d="M8 15l-4 4 1.5 1.5 4-4"/><path d="M3 9q6-1 9-6" opacity=".5"/></svg>'
-  };
-
   /* ================= хранилище ================= */
-
-  var LocalStore = (function () {
-    var LS = 'rp-card-characters';
-    var mem = null, mode = 'idb', dbp = null;
-    function open() {
-      if (dbp) return dbp;
-      dbp = new Promise(function (res, rej) {
-        // некоторые браузеры на file:// «подвисают» на indexedDB.open — не ждём дольше 2 с
-        setTimeout(function () { rej(new Error('IndexedDB timeout')); }, 2000);
-        try {
-          var rq = indexedDB.open('rp-card', 1);
-          rq.onupgradeneeded = function () { rq.result.createObjectStore('characters', { keyPath: 'id' }); };
-          rq.onsuccess = function () { res(rq.result); };
-          rq.onerror = function () { rej(rq.error); };
-        } catch (e) { rej(e); }
-      });
-      return dbp;
-    }
-    function tx(kind, fn) {
-      return open().then(function (db) {
-        return new Promise(function (res, rej) {
-          setTimeout(function () { rej(new Error('IndexedDB timeout')); }, 2500);
-          var t = db.transaction('characters', kind), rq = fn(t.objectStore('characters'));
-          t.oncomplete = function () { res(rq ? rq.result : undefined); };
-          t.onerror = function () { rej(t.error); };
-          t.onabort = function () { rej(t.error); };
-        });
-      });
-    }
-    function lsRead() { try { return JSON.parse(localStorage.getItem(LS) || '[]'); } catch (e) { return mem || []; } }
-    function lsWrite(list) {
-      mem = list;
-      try { localStorage.setItem(LS, JSON.stringify(list)); }
-      catch (e) { throw new Error('в браузере закончилось место (арты занимают много). Сделай экспорт и удали лишних персонажей'); }
-    }
-    function fallback(e) { console.warn('IndexedDB недоступен, используем localStorage', e); mode = 'ls'; }
-    return {
-      all: function () {
-        if (mode === 'ls') return Promise.resolve(lsRead());
-        return tx('readonly', function (s) { return s.getAll(); }).catch(function (e) { fallback(e); return lsRead(); });
-      },
-      put: function (ch) {
-        if (mode === 'ls') {
-          var l = lsRead().filter(function (c) { return c.id !== ch.id; }); l.push(ch);
-          try { lsWrite(l); } catch (e) { return Promise.reject(e); }
-          return Promise.resolve();
-        }
-        return tx('readwrite', function (s) { return s.put(ch); }).catch(function (e) { fallback(e); return LocalStore.put(ch); });
-      },
-      remove: function (id) {
-        if (mode === 'ls') { try { lsWrite(lsRead().filter(function (c) { return c.id !== id; })); } catch (e) { /* удаление только уменьшает объём */ } return Promise.resolve(); }
-        return tx('readwrite', function (s) { return s.delete(id); }).catch(function (e) { fallback(e); return LocalStore.remove(id); });
-      }
-    };
-  })();
 
   /* Общий сервер (Supabase) включается через data/config.js; без него — хранилище в браузере. */
   var Remote = window.RPRemote && window.RPRemote.enabled ? window.RPRemote : null;
@@ -166,57 +73,6 @@
   function demoList() { return SEED.map(function (c, i) { return Object.assign(normalize(clone(c)), { createdAt: i }); }); }
 
   /* ================= модель персонажа ================= */
-
-  function blankCharacter() {
-    return {
-      id: '', name: '',
-      attribute: { name: '', description: '', entryCost: null, upkeepCost: null, upkeepIntervalMin: null },
-      art: null,
-      stats: { punch: 1000, lift: 200, speed: 10, reaction: 250, stamina: 100 },
-      weightKg: 70, awakenings: 0, ap: 0, sp: 0,
-      styles: [], traits: [], buffs: [], abilities: []
-    };
-  }
-  /** Приводит персонажа к полному формату (старые/импортированные данные). */
-  function normalize(c) {
-    var b = blankCharacter();
-    c = Object.assign(b, c || {});
-    c.attribute = Object.assign(blankCharacter().attribute, c.attribute || {});
-    c.stats = Object.assign(blankCharacter().stats, c.stats || {});
-    ['styles', 'traits', 'buffs'].forEach(function (k) { if (!Array.isArray(c[k])) c[k] = []; });
-    c.traits = c.traits.slice(0, RULES.maxTraits);
-    c.buffs = c.buffs.map(upgradeBuff);
-    c.abilities = (Array.isArray(c.abilities) ? c.abilities : []).filter(function (a) { return a && typeof a === 'object'; }).slice(0, RULES.abilities.max).map(normAbility);
-    // арт — только картинка из браузера или https-ссылка (данные других игроков не доверенные)
-    if (typeof c.art !== 'string' || !/^(data:image\/|https:\/\/)/.test(c.art)) c.art = null;
-    return c;
-  }
-  /**
-   * Старый бафф -> новый формат. Нет layer — внутренний; нет type — по знаку процента
-   * (дальше процент хранится положительным); нет scope — «все аспекты»; нет enabled — включён.
-   */
-  function upgradeBuff(b) {
-    var p = parseFloat(b.percent);
-    var type = b.type === 'debuff' || b.type === 'buff' ? b.type : (p < 0 ? 'debuff' : 'buff');
-    return Object.assign({}, b, { type: type, percent: isFinite(p) ? Math.abs(p) : b.percent, layer: b.layer === 'external' ? 'external' : 'internal', scope: b.scope || 'all', enabled: b.enabled !== false });
-  }
-  /** Способность атрибута в полном формате (данные могут быть чужими: приводим типы). */
-  function normAbility(a) {
-    return { id: String(a.id || makeBuffId()), name: String(a.name || ''), description: String(a.description || ''), upkeepNote: String(a.upkeepNote || ''),
-      parentId: String(a.parentId || ''), fixedCost: a.fixedCost === true, alloc: normAlloc(a.alloc), pros: normList(a.pros), cons: normList(a.cons), ap: a.ap === undefined || a.ap === '' ? 0 : a.ap,
-      entryCost: a.entryCost === undefined ? null : a.entryCost, upkeepCost: a.upkeepCost === undefined ? null : a.upkeepCost,
-      images: (Array.isArray(a.images) ? a.images : []).filter(function (u) { return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u); }).slice(0, RULES.abilities.maxImages || 6) };
-  }  var ALLOC_KEYS = ['punch', 'speed', 'durability', 'radius', 'other'];
-  var ALLOC_LABEL = { punch: 'Сила удара', speed: 'Скорость', durability: 'Прочность', radius: 'Радиус / дальность', other: 'Прочие числа' };
-  function normList(v) { return (Array.isArray(v) ? v : []).map(function (x) { return String(x == null ? '' : x); }); }
-  function normAlloc(al) {
-    var o = {}; ALLOC_KEYS.forEach(function (k) { var v = al ? parseFloat(al[k]) : 0; o[k] = isFinite(v) && v > 0 ? v : 0; }); return o;
-  }
-  function makeBuffId() { return 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
-  function makeId(name) {
-    var base = String(name || 'char').toLowerCase().replace(/[^a-zа-яё0-9]+/gi, '-').replace(/^-|-$/g, '') || 'char';
-    return base + '-' + Math.random().toString(36).slice(2, 7);
-  }
 
   /* ================= состояние ================= */
 
@@ -542,121 +398,8 @@
   }
 
   var abOpen = {}, accOpen = {};
-  function tabAbilities() {
-    var list = R.derived.abilities, pw = R.derived.mods.attrPower;
-    function pctTxt(v) { return fmt(v, v % 1 ? 1 : 0) + '%'; }
-    var UPG_KEYS = [['radius', 'Радиус / дальность'], ['other', 'Прочие числа'], ['punch', 'Сила удара'], ['speed', 'Скорость'], ['durability', 'Прочность']];
-    function mulTxt(f, pctVal) { return '×' + fmt(f, 2) + (pctVal === undefined ? '' : '<small>(' + pctTxt(pctVal) + ')</small>'); }
-    /** Сколько AP вложено в каждый показатель способности и как изменился множитель (было → стало). */
-    function allocBlock(a, mark) {
-      if ((!a.ap && !a.allocTotal) || !a.targets.length) return '';
-      var U = RULES.abilities.upgrade, rows = UPG_KEYS.filter(function (kv) { return a.targets.indexOf(kv[0]) !== -1; }).map(function (kv) {
-        var key = kv[0], ap = a.alloc[key] || 0, l = a.lines.filter(function (x) { return x.key === key; })[0], eff = '';
-        if (key === 'radius' || key === 'other') eff = mulTxt(1) + ' → ' + mulTxt(1 + ap / U.stepAp * U.distancePercentPerStep / 100) + ' (+' + fmt(ap / U.stepAp * U.distancePercentPerStep, 1) + '% от начального)';
-        else if (l && l.child) eff = mulTxt(l.k0) + ' → ' + mulTxt(l.k) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
-        else if (l) eff = mulTxt(l.factor, l.percent) + ' → ' + mulTxt(l.factorNow, l.percentNow) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
-        else if (ap) eff = '+' + fmt(ap / U.stepAp * U.physPercentPerStep, 1) + '% (в описании нет метки)';
-        return '<div class="upg-row' + (key === mark ? ' me' : '') + '"><span>' + kv[1] + '</span><b>' + fmt(ap, 0) + ' AP</b><span class="upg-eff">' + eff + '</span></div>';
-      }).join('');
-      return '<div class="upg"><div class="upg-h">Вложено в способность: ' + fmt(a.allocTotal, 0) + ' из ' + fmt(a.ap, 0) + ' AP' + (a.allocFree > 0 ? ' · свободно ' + fmt(a.allocFree, 0) : '') + (a.allocFree < 0 ? ' · <em>вложено больше, чем AP способности</em>' : '') + '</div>' + rows + '</div>';
-    }
-    function numHtml(l, a) {
-      var val = fmt(l.value, l.key === 'speed' ? 1 : 0) + ' ' + esc(l.unit);
-      var body, extra;
-      if (l.child) {
-        body = '×' + fmt(l.k, 2) + (l.bonusPp > 0 ? ' <span class="ab-was">(было ×' + fmt(l.k0, 2) + ')</span>' : '');
-        extra = 'Берётся от «' + esc(l.parentName) + '» (' + fmt(l.base, 1) + ' ' + esc(l.unit) + ') × ' + fmt(l.k, 2) + '. Сила атрибута уже учтена в родителе.';
-      } else {
-        var up = Math.abs(l.power - 1) > 1e-9;
-        var upg = l.bonusPp > 0;
-        body = mulTxt(l.factorNow, l.percentNow) + (upg ? ' <span class="ab-was">(было ×' + fmt(l.factor, 2) + ')</span>' : '') + (up ? ' <span class="ab-pw">→ ×' + fmt(l.effFactor, 2) + '<small>(' + pctTxt(l.effPercent) + ')</small></span>' : '');
-        extra = 'Стат персонажа (режим «' + esc(R.modeLabel) + '»): <b>' + fmt(l.base, 1) + ' ' + esc(l.unit) + '</b>. Способность изначально: ×' + fmt(l.factor, 2) + ' (' + pctTxt(l.percent) + ')' +
-          (upg ? ', с прокачкой (' + fmt(l.allocAp, 0) + ' AP): <b>×' + fmt(l.factorNow, 2) + ' (' + pctTxt(l.percentNow) + ')</b>, без прокачки было бы ' + fmt(l.valueNoUpgrade, 0) + ' ' + esc(l.unit) : '') + '.' +
-          (up ? '<br>Сила атрибута ×' + fmt(l.power, 2) + ' усиливает процент: ' + pctTxt(l.percentNow) + ' → ' + pctTxt(l.effPercent) + ' (×' + fmt(l.effFactor, 2) + ').' : '');
-      }
-      extra = 'Множитель: <b>' + body + '</b>' + (l.ms !== undefined ? '<br>' + fmt(l.ms, 1) + ' м/с' : '') + '<br>' + extra + allocBlock(a, l.key);
-      var mul = l.child ? l.k : l.effFactor;
-      return '<span class="ab-num"' + tipAttr(l.label, l.formula, extra) + '>' + val + (l.bonusPp > 0 ? '<span class="ab-up" title="прокачано">▲</span>' : '') + '<span class="ab-mul">×' + fmt(mul, 2) + '</span></span>';
-    }
-    function prosConsHtml(a) {
-      function list(items, cls, sign) {
-        return items.map(function (sg) { return '<div class="ab-pc ' + cls + '"><span class="ab-pc-i" aria-hidden="true">' + sign + '</span><div>' + segHtml(sg, a) + '</div></div>'; }).join('');
-      }
-      if (!(a.pros || []).length && !(a.cons || []).length) return '';
-      return '<div class="ab-pcs">' + list(a.pros || [], 'pro', '+') + list(a.cons || [], 'con', '−') + '</div>';
-    }
-    function segHtml(segments, a) {
-      return segments.map(function (s) {
-        if (s.line) return numHtml(s.line, a);
-        if (s.fixed !== undefined) return '<span class="ab-fix"' + tipAttr('Не меняется', null, 'Это число помечено исключением: сила атрибута его не увеличивает.') + '>' + esc(s.fixed) + '</span>';
-        if (s.scaled) {
-          var c = s.scaled, shown = fmt(c.value, Math.abs(c.value - Math.round(c.value)) < 1e-9 ? 0 : 2);
-          if (Math.abs(c.F - 1) < 1e-9 && Math.abs(c.D - 1) < 1e-9) return esc(fmt(c.num, c.num % 1 ? 2 : 0) + c.suffix);
-          return '<span class="ab-sc"' + tipAttr(c.scopeLabel + ' · сила атрибута ×' + fmt(c.F, 2) + (c.D !== 1 ? ' · прокачка ×' + fmt(c.D, 2) : ''), c.formula, ('Было ' + esc(fmt(c.num, c.num % 1 ? 2 : 0) + c.suffix) + '. ') + (c.forced ? 'Число помечено «масштабировать».' : 'Число с единицей растёт от силы атрибута автоматически. Чтобы оставить его как есть, оберни в {= …} в форме.') + allocBlock(a, c.scope === 'radius' ? 'radius' : 'other')) + '>' + esc(shown + c.suffix) + '</span>';
-        }
-        return esc(s.text);
-      }).join('');
-    }
-    function upgradeHtml(a) {
-      if ((!a.ap && !a.allocTotal) || !a.targets.length) return '';
-      var parts = UPG_KEYS.filter(function (kv) { return a.alloc[kv[0]] > 0; }).map(function (kv) {
-        var key = kv[0], l = a.lines.filter(function (x) { return x.key === key; })[0], U = RULES.abilities.upgrade, eff;
-        if (key === 'radius' || key === 'other') eff = '×' + fmt(1 + a.alloc[key] / U.stepAp * U.distancePercentPerStep / 100, 2);
-        else if (l && l.child) eff = '×' + fmt(l.k0, 2) + ' → ×' + fmt(l.k, 2);
-        else if (l) eff = '×' + fmt(l.factor, 2) + ' → ×' + fmt(l.factorNow, 2);
-        else eff = '+' + fmt(a.alloc[key] / U.stepAp * U.physPercentPerStep, 1) + '%';
-        return '<span class="upg-chip">' + kv[1] + ' <b>' + fmt(a.alloc[key], 0) + ' AP</b> <small>' + eff + '</small></span>';
-      });
-      return '<div class="upg-line" ' + tipAttr('Прокачка', null, allocBlock(a, '')).slice(1) + '>' + (parts.length ? parts.join('') : '<span class="hint">AP ещё не распределены</span>') +
-        ' <small>' + (a.allocFree !== 0 ? (a.allocFree > 0 ? 'свободно ' + fmt(a.allocFree, 0) + ' AP' : 'перебор ' + fmt(-a.allocFree, 0) + ' AP') : 'всё распределено') + '</small></div>';
-    }
-    function galleryHtml(a) {
-      if (!a.images || !a.images.length) return '';
-      return '<div class="ab-gallery">' + a.images.map(function (u) { return '<img class="ab-img" src="' + esc(u) + '" alt="' + esc(a.name) + '" loading="lazy">'; }).join('') + '</div>';
-    }
-    function costChips(a) {
-      if (a.entry === null && a.upkeep === null) return '';
-      function chip(label, v, eff, note) {
-        var shown = a.fixedCost ? v : eff, red = !a.fixedCost && Math.abs(eff - v) > 1e-9;
-        var tip = tipAttr('Траты стамины · ' + label.toLowerCase(), null, 'Изначально ' + fmt(v, 2) + '%. ' + (a.fixedCost ? 'Траты фиксированные: от AP не зависят.' : red ? 'С учётом общего AP персонажа: ' + fmt(eff, 2) + '%.' : 'AP пока не снижают эту трату.') + (note ? '<br>' + esc(note) : ''));
-        return '<span class="abx-chip cost' + (a.fixedCost ? ' fixed' : '') + '"' + tip + '><small>' + label + '</small><b>' + fmt(shown, 2) + '%</b>' + (red ? '<small>было ' + fmt(v, 2) + '%</small>' : '') + '</span>';
-      }
-      return (a.entry !== null ? chip('Призыв', a.entry, a.entryEff, '') : '') + (a.upkeep !== null ? chip('Поддержание', a.upkeep, a.upkeepEff, a.upkeepNote) : '');
-    }
-    function sumChips(a) {
-      return a.lines.slice(0, 3).map(function (l) { return '<span class="abx-chip"><small>' + esc(l.label) + '</small><b>' + fmt(l.value, l.key === 'speed' ? 1 : 0) + ' ' + esc(l.unit) + '</b></span>'; }).join('');
-    }
-    function kids(a) { return list.filter(function (x) { return x.parentId === a.id; }); }
-    function section(title, html) { return '<section class="abx-sec"><div class="abx-sec-h">' + title + '</div>' + html + '</section>'; }
-    var roots = list.filter(function (a) { return !a.parentId; });
-    function isOpen(key, depth, idx) {
-      if (abOpen[key] !== undefined) return abOpen[key];
-      return depth > 0 || roots.length <= 2 || idx === 0;
-    }
-    function block(a, depth, idx) {
-      var key = ch.id + ':' + a.id, open = isOpen(key, depth, idx), body = '';
-      body += section('Описание', '<p class="abx-text">' + segHtml(a.segments, a) + '</p>');
-      var pc = prosConsHtml(a); if (pc) body += section('Плюсы и минусы', pc);
-      var gal = galleryHtml(a); if (gal) body += section('Изображения', gal);
-      var up = upgradeHtml(a); if (up) body += section('Прокачка', up);
-      body += kids(a).map(function (k) { return block(k, depth + 1, 0); }).join('');
-      return '<article class="abx' + (depth ? ' is-sub' : '') + (open ? '' : ' is-closed') + '">' +
-        '<header class="abx-head" role="button" tabindex="0" aria-expanded="' + open + '" data-ab-toggle="' + esc(key) + '">' +
-        '<span class="abx-chev" aria-hidden="true"></span>' +
-        '<div class="abx-title"><span class="abx-kind">' + (depth ? 'Подспособность' : 'Способность') + '</span><h3>' + esc(a.name || 'Без названия') + '</h3></div>' +
-        '<div class="abx-meta">' + (a.ap ? '<span class="abx-chip ap"><b>' + fmt(a.ap, 0) + '</b><small>AP</small></span>' : '') + costChips(a) + '</div>' +
-        '<div class="abx-sum">' + sumChips(a) + '</div></header>' +
-        '<div class="abx-body">' + body + '</div></article>';
-    }
-    var modeBtns = ['base', 'passive', 'active'].map(function (m) { return '<button type="button" data-abmode="' + m + '" aria-pressed="' + (view.mode === m) + '">' + esc(RULES.modes[m].label) + '</button>'; }).join('');
-    var bar = '<div class="ab-bar"><div class="ab-modes" role="group" aria-label="Режим статов">' + modeBtns + '</div>' +
-      '<div class="tools"><button type="button" class="mini-btn" data-ab-all="1">Развернуть все</button><button type="button" class="mini-btn" data-ab-all="0">Свернуть все</button></div></div>';
-    var lead = '<p class="ab-lead">Числа считаются от текущих статов в режиме <b>«' + esc(R.modeLabel) + '»</b>' + (view.wounds.length ? ' с ранениями' : '') + '. Сила атрибута: <b>' + fmt(pw.value, 1) + '%</b>. Наведи на число или коснись его, чтобы увидеть формулу.</p>' +
-      '<details class="ab-help"><summary>Как считаются числа</summary><p>Число в описании, помеченное статом, считается как стат персонажа × множитель способности, который усиливает сила атрибута. Расстояния и другие числа с единицами (м, км, кг, км/ч) тоже растут от силы атрибута; число с замочком 🔒 не меняется. ▲ рядом с числом значит, что в него вложены AP. Мелкое «×» после числа — итоговый множитель.</p></details>';
-    var btn = '<p style="margin-top:14px"><button class="mini-btn accent" data-open-editor' + (canEdit(ch) ? '' : ' disabled') + '>✎ Добавить / изменить способности</button></p>';
-    if (!roots.length) return bar + lead + '<div class="empty-note">Способностей пока нет.</div>' + btn;
-    return bar + lead + '<div class="ab-list">' + roots.map(function (a, i) { return block(a, 0, i); }).join('') + '</div>' + btn;
-  }  function tabCalc() {
+  function tabAbilities() { return AbView.render({ R: R, ch: ch, view: view, canEdit: canEdit, abOpen: abOpen }); }
+  function tabCalc() {
     var strikes = R.derived.strikes;
     if (!calcState.strike || !strikes.some(function (s) { return s.key === calcState.strike; })) calcState.strike = (strikes.filter(function (s) { return s.primary; })[0] || strikes[0]).key;
     var zones = RULES.durability.zones, sm = R.derived.stamina, at = ch.attribute || {};
@@ -1054,39 +797,6 @@ function allocEditor(a, base, i) {
   }
   function takeArt(file) {
     readImage(file).then(function (url) { draft.art = url; renderEditor(); }).catch(function (e) { toast(e.message); });
-  }
-
-  function cleanAlloc(a) {
-    var al = normAlloc(a.alloc), tg = E.abilityTargets(a, RULES);
-    ALLOC_KEYS.forEach(function (k) { if (tg.indexOf(k) === -1) al[k] = 0; });
-    return al;
-  }
-  function cleanDraft(d) {
-    function n(v) { v = parseFloat(v); return isFinite(v) ? v : null; }
-    var c = clone(d);
-    c.name = String(c.name || '').trim();
-    c.attribute.name = String(c.attribute.name || '').trim();
-    c.attribute.entryCost = n(c.attribute.entryCost);
-    c.attribute.upkeepCost = n(c.attribute.upkeepCost);
-    c.attribute.upkeepIntervalMin = n(c.attribute.upkeepIntervalMin);
-    Object.keys(c.stats).forEach(function (k) { c.stats[k] = n(c.stats[k]) || 0; });
-    if (c.stats.reaction < RULES.reaction.absoluteMs) c.stats.reaction = RULES.reaction.absoluteMs;
-    ['ap', 'sp', 'weightKg', 'awakenings'].forEach(function (k) { c[k] = Math.max(0, n(c[k]) || 0); });
-    c.styles = c.styles.filter(function (s) { return String(s.name || '').trim(); }).map(function (s) { return { name: s.name.trim(), strikeType: s.strikeType || '' }; });
-    c.traits = c.traits.filter(function (t) { return String(t.name || '').trim(); }).slice(0, RULES.maxTraits).map(function (t) { return { name: t.name.trim(), description: String(t.description || '').trim() }; });
-    var ids = {};
-    c.abilities = (c.abilities || []).filter(function (a) { return String(a.name || '').trim(); }).slice(0, RULES.abilities.max).map(function (a) {
-      ids[String(a.id || '')] = true;
-      return { id: String(a.id || makeBuffId()), name: String(a.name).trim(), description: String(a.description || '').trim(), upkeepNote: String(a.upkeepNote || '').trim(), parentId: String(a.parentId || ''),
-        fixedCost: a.fixedCost === true, alloc: cleanAlloc(a), pros: normList(a.pros).map(function (s) { return s.trim(); }).filter(Boolean), cons: normList(a.cons).map(function (s) { return s.trim(); }).filter(Boolean), ap: Math.max(0, n(a.ap) || 0), entryCost: n(a.entryCost), upkeepCost: n(a.upkeepCost),
-        images: (Array.isArray(a.images) ? a.images : []).filter(function (u) { return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u); }).slice(0, RULES.abilities.maxImages || 6) };
-    });    c.abilities.forEach(function (a) { if (!ids[a.parentId] || a.parentId === a.id) a.parentId = ''; });
-    c.buffs = c.buffs.filter(function (b) { return n(b.percent); }).map(function (b) {
-      var u = upgradeBuff(Object.assign({}, b, { percent: n(b.percent) }));
-      var scoped = RULES.modifiers[u.stat] && RULES.modifiers[u.stat].scoped;
-      return { id: u.id || makeBuffId(), mode: u.mode, stat: u.stat, percent: u.percent, type: u.type, layer: u.layer, scope: scoped ? u.scope : 'all', source: u.source || '', label: String(u.label || '').trim(), enabled: u.enabled };
-    });
-    return c;
   }
 
   function saveEditor(e) {
