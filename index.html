@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Карточка персонажа</title>
+  <meta name="description" content="Экран персонажа РП-сервера: карточка с артом, статы в трёх режимах, калькуляторы.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&family=Unbounded:wght@400;600;800&display=swap&subset=cyrillic" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="bg-layer" aria-hidden="true">
+    <div class="bg-grid"></div>
+    <div class="bg-vignette"></div>
+  </div>
+
+  <div class="app" id="app">
+    <!-- ВЕРХ -->
+    <header class="topbar panel">
+      <div class="id-block">
+        <div class="emblem" id="emblem" aria-hidden="true"></div>
+        <div>
+          <div class="char-select-wrap">
+            <h1 class="char-name" id="charName">—</h1>
+            <select id="charSelect" class="char-select" aria-label="Выбор персонажа"></select>
+          </div>
+          <div class="char-actions">
+            <button class="mini-btn accent" id="btnEdit">✎ Редактировать</button>
+            <button class="mini-btn" id="btnNew">+ Новый</button>
+            <span class="who" id="who" hidden></span>
+            <button class="mini-btn" id="btnAuth" hidden>Войти через Discord</button>
+            <div class="shot" id="shot">
+              <button class="mini-btn" id="btnShot" aria-haspopup="menu" aria-expanded="false" aria-controls="shotMenu">📷 Скриншот персонажа</button>
+              <div class="shot-menu panel" id="shotMenu" role="menu" hidden>
+                <button role="menuitem" data-shot="full"><b>Весь экран</b><small>статы, карточка, шапка · 1920×1080, PNG ×3</small></button>
+                <button role="menuitem" data-shot="card"><b>Только карточка</b><small>арт на пьедестале на тёмном фоне · 1080×1350, PNG ×3</small></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="top-badges" id="topBadges"></div>
+      <div class="top-progress" id="topProgress"></div>
+    </header>
+
+    <!-- ЛЕВО: статы -->
+    <section class="panel side left" id="leftPanel">
+      <div class="panel-head">
+        <h2>Характеристики</h2>
+        <span class="head-hint" id="modeHint"></span>
+      </div>
+      <div class="mode-switch" role="tablist" aria-label="Режим статов" id="modeSwitch">
+        <button role="tab" data-mode="base">Базовые</button>
+        <button role="tab" data-mode="passive">Пассивные</button>
+        <button role="tab" data-mode="active">Активные</button>
+        <span class="mode-glider" aria-hidden="true"></span>
+      </div>
+      <div class="stat-list" id="statList"></div>
+      <div class="sub-block">
+        <div class="sub-head">
+          <h3>Ранения</h3>
+          <button class="mini-btn" id="woundsClear" title="Снять все ранения">сброс</button>
+        </div>
+        <div class="wound-add">
+          <select id="woundDegree" aria-label="Степень ранения"></select>
+          <select id="woundStat" aria-label="Связанная характеристика"></select>
+          <button class="mini-btn accent" id="woundAdd">+ ранение</button>
+        </div>
+        <div class="wound-list" id="woundList"></div>
+      </div>
+    </section>
+
+    <!-- ЦЕНТР: карточка на пьедестале -->
+    <section class="stage" id="stage">
+      <div class="stage-beam" aria-hidden="true"></div>
+      <div class="stage-haze" aria-hidden="true"></div>
+      <canvas id="figureCanvas" aria-label="Карточка персонажа на пьедестале"></canvas>
+      <div class="figure-fallback" id="figureFallback" hidden></div>
+      <div class="stage-plate" id="stagePlate"></div>
+      <div class="stage-hint">тяни мышью, чтобы повернуть</div>
+    </section>
+
+    <!-- ПРАВО: производные -->
+    <section class="panel side right" id="rightPanel">
+      <div class="panel-head">
+        <h2>Производные</h2>
+        <span class="head-hint">наведи на число — формула</span>
+      </div>
+      <div class="limit-card" id="limitCard"></div>
+      <div class="derived-grid" id="derivedGrid"></div>
+      <div class="sub-block">
+        <div class="sub-head"><h3>Варианты удара</h3></div>
+        <div class="strike-list" id="strikeList"></div>
+      </div>
+    </section>
+
+    <!-- НИЗ -->
+    <section class="panel bottom" id="bottomPanel">
+      <div class="bottom-col">
+        <div class="sub-head"><h3>Стили боя</h3></div>
+        <div class="chips" id="styleChips"></div>
+      </div>
+      <div class="bottom-col">
+        <div class="sub-head"><h3>Трейты</h3><span class="head-hint" id="traitCount"></span></div>
+        <div class="chips" id="traitChips"></div>
+      </div>
+    </section>
+
+    <nav class="dock" id="dock" aria-label="Разделы">
+      <button data-tab="abilities"><span class="dock-ico">✦</span>Способности</button>
+      <button data-tab="calc"><span class="dock-ico">⌬</span>Калькуляторы</button>
+      <button data-tab="progress"><span class="dock-ico">▲</span>Прогресс</button>
+      <button data-tab="rules"><span class="dock-ico">§</span>Правила</button>
+    </nav>
+  </div>
+
+  <!-- МОДАЛКА: справка и калькуляторы -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-box panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <div class="modal-tabs" id="modalTabs"></div>
+        <button class="close-btn" data-close aria-label="Закрыть">✕</button>
+      </div>
+      <h2 class="sr-only" id="modalTitle">Раздел</h2>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- МОДАЛКА: форма персонажа -->
+  <div class="modal" id="editor" hidden>
+    <div class="modal-backdrop" data-eclose></div>
+    <form class="modal-box panel editor-box" role="dialog" aria-modal="true" aria-labelledby="editorTitle" id="editorForm" novalidate>
+      <div class="modal-head">
+        <h2 id="editorTitle" class="editor-title">Персонаж</h2>
+        <button type="button" class="close-btn" data-eclose aria-label="Закрыть">✕</button>
+      </div>
+      <div class="modal-body" id="editorBody"></div>
+      <div class="editor-foot">
+        <div class="foot-left">
+          <button type="button" class="mini-btn" id="btnExport">Экспорт JSON</button>
+          <label class="mini-btn file-btn">Импорт JSON<input type="file" id="importFile" accept=".json,application/json" hidden></label>
+          <button type="button" class="mini-btn danger" id="btnDelete">Удалить</button>
+        </div>
+        <div class="foot-right">
+          <button type="button" class="mini-btn" data-eclose>Отмена</button>
+          <button type="submit" class="mini-btn accent big">Сохранить</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="data/rules.js"></script>
+  <script src="data/characters.js"></script>
+  <script src="data/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/remote.js"></script>
+  <script src="js/figure.js"></script>
+  <script src="js/screenshot.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
