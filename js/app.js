@@ -265,25 +265,32 @@
     return dcell('Множитель прочности', '×' + fmt(c.factor, 2), '', 'база ' + fmt(c.base, 0) + ' → ' + fmt(c.value, 0) + ' кг', 'Множитель прочности', c.formula + ' кг', RULES.modifiers.durability.desc + chainHtml(c, 'кг', 0));
   }
 
+  /** Компактная строка для второстепенных параметров. */
+  function drow(label, value, unit, sub, title, formula, extra, cls) {
+    return '<div class="drow' + (cls ? ' ' + cls : '') + '"' + tipAttr(title || label, formula, extra) + '><span class="drl">' + esc(label) + '</span><span class="drv">' + value + (unit ? '<small>' + esc(unit) + '</small>' : '') + '</span>' + (sub ? '<span class="drs">' + sub + '</span>' : '') + '</div>';
+  }
+  var dmoreOpen = true;
+
   function renderDerived() {
     var d = R.derived, mt = d.meleeTiming, sm = d.stamina;
-    var cells = [
-      dcell('Прочность', fmt(d.durability.value, 0), 'кг', 'сила удара × 3', 'Прочность', d.durability.formula, 'Минимум без индивидуального дебаффа: ' + RULES.durability.minimum + ' кг (до множителя прочности).' + chainHtml(d.durability.chain, 'кг', 0)),
-      dcell('Взрывная сила', fmt(d.explosive.value, 0), 'кг', 'за ' + fmt(d.explosive.timeMs) + ' мс', 'Взрывная сила', d.explosive.formula + '; ' + d.explosive.timeFormula, 'Подъём × 2. Достигается за ½ реакции, но не дольше 100 мс.'),
-      dcell('Скорость', fmt(d.speed.kmh), 'км/ч', fmt(d.speed.ms, 2) + ' м/с', 'Скорость', d.speed.formula, 'Разгон: ' + esc(d.accel.formula)),
-      dcell('Скорость атаки', fmt(d.attackSpeed.kmh), 'км/ч', fmt(d.attackSpeed.ms, 2) + ' м/с', 'Скорость атаки', d.attackSpeed.formula, 'Скорость × 1.5'),
-      dcell('Давление (ладонь)', fmt(d.pressure.value, 2), 'кг/см²', 'потолок ' + fmt(d.pressure.cap) + ' кг/см²', 'Давление', d.pressure.formula, 'Подъём ÷ площадь (ладонь ' + RULES.lift.palmAreaCm2 + ' см²). Максимум ×4 от подъёма.'),
-      dcell('Подъём ногами', fmt(d.liftLegs.value, 0), 'кг', 'без конечности: ' + fmt(d.liftOneLimb.value, 0) + ' кг', 'Подъём', d.liftLegs.formula + '; ' + d.liftOneLimb.formula),
-      dcell('Разгон', fmt(d.accel.effectiveStart), 'км/ч', d.accel.instantMax ? 'сразу максимум · ' + d.accel.distanceM + ' м' : 'старт · ' + d.accel.distanceM + ' м до макс.', 'Стартовая скорость разгона', d.accel.formula),
-      dcell('Своя атака вблизи', fmt(mt.attackTimeMs, 0), 'мс', 'свободно ' + fmt(mt.freeMs, 0) + ' мс', 'Время атаки на 2 м', mt.formula, 'Ближний бой (≤ 2 м) считается на 2 м. Каст способности = реакция (' + fmt(R.stats.reaction.value) + ' мс).'),
-      sm ? (sm.hasUpkeep
-        ? dcell('Атрибут: запас', sm.minutesToCritical + '–' + sm.minutesTo0, 'мин', 'до 10% / до 0%', 'Сколько продержит способность', sm.formulaC + ' · ' + sm.formula0, 'Вход ' + esc(sm.formulaEntry) + ', поддержание −' + fmt(sm.upkeep, 2) + '% каждые ' + sm.interval + ' мин. На 10% персонаж теряет сознание.', 'wide')
-        : '') : '',
-      dcell('Бег по воде', d.water.available ? 'доступен' : 'недоступен', '', d.water.available ? '' : 'не хватает ' + fmt(d.water.deficitMs, 2) + ' м/с (' + fmt(d.water.deficitKmh, 0) + ' км/ч)', 'Бег по воде', d.water.formula, 'От 40 м/с; при массе > 100 кг — 50 м/с и +50 м/с за каждые следующие 100 кг.', 'wide' + (d.water.available ? '' : ' locked'))
+    // главное: прочность крупно, рядом два боевых показателя
+    var main = [
+      dcell('Прочность', fmt(d.durability.value, 0), 'кг', 'сила удара × 3', 'Прочность', d.durability.formula, 'Минимум без индивидуального дебаффа: ' + RULES.durability.minimum + ' кг (до множителя прочности).' + chainHtml(d.durability.chain, 'кг', 0), 'hero'),
+      dcell('Скорость атаки', fmt(d.attackSpeed.kmh), 'км/ч', fmt(d.attackSpeed.ms, 2) + ' м/с', 'Скорость атаки', d.attackSpeed.formula, 'Скорость × 1.5', 'key'),
+      dcell('Взрывная сила', fmt(d.explosive.value, 0), 'кг', 'за ' + fmt(d.explosive.timeMs) + ' мс', 'Взрывная сила', d.explosive.formula + '; ' + d.explosive.timeFormula, 'Подъём × 2. Достигается за ½ реакции, но не дольше 100 мс.', 'key')
     ];
-    $('#derivedGrid').innerHTML = cells.join('');
+    var more = [
+      drow('Скорость', fmt(d.speed.kmh), 'км/ч', fmt(d.speed.ms, 2) + ' м/с', 'Скорость', d.speed.formula, 'Разгон: ' + esc(d.accel.formula)),
+      drow('Давление (ладонь)', fmt(d.pressure.value, 2), 'кг/см²', 'потолок ' + fmt(d.pressure.cap) + ' кг/см²', 'Давление', d.pressure.formula, 'Подъём ÷ площадь (ладонь ' + RULES.lift.palmAreaCm2 + ' см²). Максимум ×4 от подъёма.'),
+      drow('Подъём ногами', fmt(d.liftLegs.value, 0), 'кг', 'без конечности: ' + fmt(d.liftOneLimb.value, 0) + ' кг', 'Подъём', d.liftLegs.formula + '; ' + d.liftOneLimb.formula),
+      drow('Разгон', fmt(d.accel.effectiveStart), 'км/ч', d.accel.instantMax ? 'сразу максимум · ' + d.accel.distanceM + ' м' : 'старт · ' + d.accel.distanceM + ' м до макс.', 'Стартовая скорость разгона', d.accel.formula),
+      drow('Своя атака вблизи', fmt(mt.attackTimeMs, 0), 'мс', 'свободно ' + fmt(mt.freeMs, 0) + ' мс', 'Время атаки на 2 м', mt.formula, 'Ближний бой (≤ 2 м) считается на 2 м. Каст способности = реакция (' + fmt(R.stats.reaction.value) + ' мс).'),
+      sm && sm.hasUpkeep ? drow('Атрибут: запас', sm.minutesToCritical + '–' + sm.minutesTo0, 'мин', 'до 10% / до 0%', 'Сколько продержит способность', sm.formulaC + ' · ' + sm.formula0, 'Вход ' + esc(sm.formulaEntry) + ', поддержание −' + fmt(sm.upkeep, 2) + '% каждые ' + sm.interval + ' мин. На 10% персонаж теряет сознание.') : '',
+      drow('Бег по воде', d.water.available ? 'доступен' : 'недоступен', '', d.water.available ? '' : 'не хватает ' + fmt(d.water.deficitMs, 2) + ' м/с (' + fmt(d.water.deficitKmh, 0) + ' км/ч)', 'Бег по воде', d.water.formula, 'От 40 м/с; при массе > 100 кг — 50 м/с и +50 м/с за каждые следующие 100 кг.', d.water.available ? '' : 'locked')
+    ];
+    $('#derivedGrid').innerHTML = main.join('') +
+      '<details class="dmore"' + (dmoreOpen ? ' open' : '') + '><summary>Ещё параметры <small>' + more.filter(Boolean).length + '</small></summary><div class="dlist">' + more.join('') + '</div></details>';
   }
-
   function renderStrikes() {
     var list = R.derived.strikes.slice().sort(function (a, b) { return (b.primary ? 1 : 0) - (a.primary ? 1 : 0); });
     $('#strikeList').innerHTML = list.map(function (s) {
@@ -1029,6 +1036,7 @@ function allocEditor(a, base, i) {
   /* ================= события главного экрана ================= */
 
   function bind() {
+    $('#derivedGrid').addEventListener('toggle', function (e) { if (e.target.classList && e.target.classList.contains('dmore')) dmoreOpen = e.target.open; }, true);
     $('#modalBody').addEventListener('keydown', function (e) {
       var tg = e.target.closest && e.target.closest('[data-ab-toggle]');
       if (tg && e.target === tg && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tg.click(); }
