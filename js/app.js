@@ -70,6 +70,14 @@
     return Remote.isAdmin() || c.ownerId === u.id;
   }
   /** Показ демо-персонажей, когда на сервере пусто или он недоступен (на сервер не пишется). */
+  /** Пустой шаблон для первого запуска: вместо готового персонажа — подсказки, что куда вписывать. */
+  function templateCharacter() {
+    var c = blankCharacter();
+    c.id = makeId('hero'); c.name = 'Новый герой'; c.createdAt = 0;
+    c.attribute.name = 'Название атрибута';
+    c.attribute.description = 'Опиши способность атрибута своими словами.';
+    return c;
+  }
   function demoList() { return SEED.map(function (c, i) { return Object.assign(normalize(clone(c)), { createdAt: i }); }); }
 
   /* ================= модель персонажа ================= */
@@ -77,6 +85,7 @@
   /* ================= состояние ================= */
 
   var chars = [];
+  var firstRun = false;
   var ch = null;
   var view = { mode: 'base', wounds: [], testBuff: 0, testSource: 'external' };
   var R = null;
@@ -705,8 +714,8 @@ function allocEditor(a, base, i) {
       '<div class="row"><button type="button" class="mini-btn" id="artPick">Выбрать файл</button>' + (d.art ? '<button type="button" class="mini-btn" id="artRemove">Убрать</button>' : '') + '</div></section>' +
       // основное
       '<section class="ed-sec"><h3>Основное</h3>' +
-      fld('Имя *', inp('name', d.name, 'text', ' required placeholder="Кенос"')) +
-      fld('Атрибут', inp('attribute.name', d.attribute.name, 'text', ' placeholder="Зеркало"')) +
+      fld('Имя *', inp('name', d.name, 'text', ' required placeholder="Имя героя"')) +
+      fld('Атрибут', inp('attribute.name', d.attribute.name, 'text', ' placeholder="Например: Лёд, Тень, Жар"')) +
       fld('Описание атрибута', '<textarea data-f="attribute.description" rows="3" placeholder="необязательно">' + esc(d.attribute.description) + '</textarea>') +
       '<div class="row3">' +
       fld('AP', inp('ap', d.ap, 'number', ' min="0" step="10"')) +
@@ -731,7 +740,7 @@ function allocEditor(a, base, i) {
       // стили
       '<section class="ed-sec"><h3>Стили боя</h3><div class="sub">Первый стиль с типом удара задаёт основной удар</div>' +
       (d.styles.length ? d.styles.map(function (s, i) {
-        return '<div class="row style-row">' + inp('styles.' + i + '.name', s.name, 'text', ' placeholder="LINE: Колющее направление" aria-label="Название стиля"') +
+        return '<div class="row style-row">' + inp('styles.' + i + '.name', s.name, 'text', ' placeholder="Название боевого искусства, например LINE: Колющее направление" aria-label="Название стиля"') +
           '<select data-f="styles.' + i + '.strikeType" aria-label="Тип удара">' + opts(strikeOpts, s.strikeType) + '</select>' +
           '<button type="button" class="x" data-del="styles.' + i + '" aria-label="Удалить">✕</button></div>';
       }).join('') : '<div class="empty-note">Нет стилей.</div>') +
@@ -836,6 +845,46 @@ function allocEditor(a, base, i) {
   }
 
   /** Резервная копия: все персонажи пользователя одним файлом (тот же формат читает «Загрузить»). */
+  /** Приветствие: что куда вписывать. Показывается при первом запуске, потом по кнопке «Как пользоваться». */
+  function showWelcome() {
+    if ($('#welcome')) return;
+    var el = document.createElement('div');
+    el.className = 'modal'; el.id = 'welcome';
+    el.innerHTML = '<div class="modal-backdrop" data-wel="close"></div><div class="modal-box panel" role="dialog" aria-modal="true" aria-label="Как пользоваться"><div class="modal-head"><h2 class="editor-title">Как пользоваться карточкой</h2><button class="close-btn" data-wel="close" aria-label="Закрыть">✕</button></div><div class="modal-body welcome-body">' +
+      '<p>Это карточка РП-персонажа: статы считаются по правилам сервера, ты вводишь только исходные данные.</p>' +
+      '<ol class="wel-steps">' +
+      '<li><b>Нажми «✎ Редактировать».</b> Впиши имя. В «Базовых характеристиках» укажи голые значения из анкеты, без бонусов: сила удара, сила на подъём, скорость, реакция, стамина.</li>' +
+      '<li><b>Атрибут и способности.</b> Название и описание атрибута пиши как в анкете. Число стата в способности вставляй меткой: <code>{speed 910%}</code>, <code>{punch 280%}</code>, <code>{durability 150%}</code>. Сайт сам посчитает значение от статов. Траты стамины указываются у каждой способности.</li>' +
+      '<li><b>Бафы.</b> «Пассивные» действуют всегда, «Активные» включаются в бою. Укажи параметр, процент, баф или дебафф и источник. Переключатель «Базовые / Пассивные / Активные» на главном экране пересчитывает статы.</li>' +
+      '<li><b>Арт, трейты, стили боя.</b> Арт можно загрузить в редакторе, трейты и стили добавляются кнопками «+».</li>' +
+      '<li><b>Сохрани данные у себя.</b> Персонажи хранятся только в этом браузере. Нажимай «⬇ Скачать данные», а «⬆ Загрузить» вернёт их на любом устройстве.</li>' +
+      '</ol>' +
+      '<div class="wel-actions"><button class="mini-btn accent big" data-wel="edit">✎ Начать заполнять</button><button class="mini-btn" data-wel="load">⬆ Загрузить из файла</button><button class="mini-btn" data-wel="example">Посмотреть пример (Кенос)</button></div>' +
+      '</div></div>';
+    document.body.appendChild(el);
+    function close() { el.remove(); document.removeEventListener('keydown', onKey); try { localStorage.setItem('rp-welcome', '1'); } catch (e) { /* ок */ } }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-wel]'); if (!b) return;
+      var k = b.getAttribute('data-wel');
+      if (k === 'close') { close(); return; }
+      if (k === 'edit') { close(); if (canEdit(ch)) openEditor(false); return; }
+      if (k === 'load') { close(); $('#restoreFile').click(); return; }
+      if (k === 'example') {
+        var ex = SEED.map(function (c) { return normalize(clone(c)); })[0];
+        if (!ex) { toast('Примера нет'); return; }
+        ex.createdAt = Date.now();
+        Store.put(ex).then(function () {
+          var i = chars.map(function (x) { return x.id; }).indexOf(ex.id);
+          if (i === -1) chars.push(ex); else chars[i] = ex;
+          close(); selectCharacter(ex.id);
+        }).catch(function (err) { toast('Не удалось: ' + err.message); });
+      }
+    });
+    var f = el.querySelector('[data-wel=edit]'); if (f) f.focus();
+  }
+
   function exportAll() {
     var list = chars.filter(function (c) { return !Remote || c.ownerId; }).map(function (c) { var x = clone(c); delete x.ownerId; delete x.ownerName; return x; });
     if (!list.length) { toast('Нечего скачивать'); return; }
@@ -889,7 +938,7 @@ function allocEditor(a, base, i) {
     Store.remove(id).then(function () {
       chars = chars.filter(function (c) { return c.id !== id; });
       try { localStorage.removeItem('rp-view:' + id); } catch (e) { /* ок */ }
-      if (!chars.length) chars = demoList();
+      if (!chars.length) chars = Remote ? demoList() : [templateCharacter()];
       closeEditor();
       selectCharacter(chars[0].id);
       toast('Удалено');
@@ -988,6 +1037,7 @@ function allocEditor(a, base, i) {
     $('#editor').addEventListener('click', function (e) { if (e.target.closest('[data-eclose]')) closeEditor(); });
     $('#btnExport').addEventListener('click', exportCharacter);
     $('#btnBackup').addEventListener('click', exportAll);
+    $('#btnHelp').addEventListener('click', showWelcome);
     $('#restoreFile').addEventListener('change', function () { if (this.files[0]) importCharacters(this.files[0]); this.value = ''; });
     // просим браузер не вычищать данные при нехватке места
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ок */ }
@@ -1185,9 +1235,9 @@ function allocEditor(a, base, i) {
     }).then(function (list) {
       if (Remote) return list.length ? list.map(normalize) : demoList();
       if (!list.length) {
-        // первый запуск (или хранилище очищено): стартовые персонажи из data/characters.js
-        list = SEED.map(function (c, i) { return Object.assign(normalize(clone(c)), { createdAt: i }); });
-        if (!list.length) list = [Object.assign(blankCharacter(), { id: makeId('hero'), name: 'Новый герой' })];
+        // первый запуск (или хранилище очищено): пустой шаблон; пример Кенос загружается кнопкой в приветствии
+        list = [templateCharacter()];
+        firstRun = true;
         return Promise.all(list.map(Store.put)).then(function () { return list; });
       }
       return list.map(normalize);
@@ -1199,6 +1249,8 @@ function allocEditor(a, base, i) {
       if (RULES.modes[q.get('mode')]) { view.mode = q.get('mode'); renderAll(); }
       if (TABS.some(function (t) { return t.id === q.get('tab'); })) openModal(q.get('tab'));
       if (q.get('edit') === '1' && canEdit(ch)) openEditor(false);
+      var seen = false; try { seen = !!localStorage.getItem('rp-welcome'); } catch (e) { /* ок */ }
+      if (!Remote && firstRun && !seen) showWelcome();
     });
   }
 

@@ -918,3 +918,12 @@ body.is-capturing { cursor: progress; }
   .char-actions .mini-btn, .mini-btn { min-height: 38px; }
   input, select, textarea { font-size: 16px !important; } /* Chrome не увеличивает страницу при фокусе */
 }
+
+/* ---------- приветствие ---------- */
+#welcome { z-index: 70; }
+#welcome .modal-box { width: min(640px, 100%); }
+.wel-steps { margin: 12px 0 18px; padding-left: 22px; display: grid; gap: 10px; color: var(--text-2); line-height: 1.5; }
+.wel-steps b { color: #fff; }
+.wel-steps code { color: var(--a3); }
+.wel-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+@media (max-width: 900px) { .wel-actions .mini-btn { flex: 1 1 100%; min-height: 44px; } }
