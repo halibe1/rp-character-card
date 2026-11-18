@@ -85,7 +85,7 @@ button, select, input { font: inherit; color: inherit; }
   min-height: 100vh;
 }
 .app > * { min-width: 0; }
-.topbar { grid-area: top; }
+.topbar { grid-area: top; position: relative; z-index: 20; }
 .left { grid-area: left; }
 .right { grid-area: right; }
 .stage { grid-area: stage; }
@@ -649,7 +649,7 @@ table.t tr.hit td:first-child { box-shadow: inset 3px 0 0 var(--a3); }
 .shot { position: relative; display: inline-block; }
 .shot-menu {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; width: 320px; padding: 6px;
-  display: grid; gap: 4px; background: rgba(18, 10, 34, .97); animation: tip-in .15s ease-out both;
+  display: grid; gap: 4px; background: #140a28; animation: tip-in .15s ease-out both;
 }
 .shot-menu::before { display: none; }
 .shot-menu button {
