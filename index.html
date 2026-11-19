@@ -28,17 +28,22 @@
           </div>
           <div class="char-actions">
             <button class="mini-btn accent" id="btnEdit">✎ Редактировать</button>
-            <button class="mini-btn" id="btnNew">+ Новый</button>
             <span class="who" id="who" hidden></span>
             <button class="mini-btn" id="btnAuth" hidden>Войти через Discord</button>
-            <button class="mini-btn" id="btnHelp" title="Что куда вписывать">? Как пользоваться</button>
-            <button class="mini-btn" id="btnBackup" title="Скачать всех твоих персонажей одним файлом: данные хранятся только в этом браузере">⬇ Скачать данные</button>
-            <label class="mini-btn file-btn" title="Загрузить персонажей из файла, скачанного на этом или другом устройстве">⬆ Загрузить<input type="file" id="restoreFile" accept=".json,application/json" hidden></label>
             <div class="shot" id="shot">
-              <button class="mini-btn" id="btnShot" aria-haspopup="menu" aria-expanded="false" aria-controls="shotMenu">📷 Скриншот персонажа</button>
+              <button class="mini-btn" id="btnShot" aria-haspopup="menu" aria-expanded="false" aria-controls="shotMenu">📷 Скриншот</button>
               <div class="shot-menu panel" id="shotMenu" role="menu" hidden>
                 <button role="menuitem" data-shot="full"><b>Весь экран</b><small>статы, карточка, шапка · 1920×1080, PNG ×3</small></button>
                 <button role="menuitem" data-shot="card"><b>Только карточка</b><small>арт на пьедестале на тёмном фоне · 1080×1350, PNG ×3</small></button>
+              </div>
+            </div>
+            <div class="shot" id="more">
+              <button class="mini-btn" id="btnMore" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu" title="Персонажи и данные">☰ Данные</button>
+              <div class="shot-menu more-menu panel" id="moreMenu" role="menu" hidden>
+                <button role="menuitem" id="btnNew"><b>+ Новый персонаж</b><small>пустая карточка</small></button>
+                <button role="menuitem" id="btnBackup"><b>⬇ Скачать данные</b><small>все персонажи одним файлом — это твой бэкап</small></button>
+                <label role="menuitem" class="file-item"><b>⬆ Загрузить из файла</b><small>вернуть персонажей на этом или другом устройстве</small><input type="file" id="restoreFile" accept=".json,application/json" hidden></label>
+                <button role="menuitem" id="btnHelp"><b>? Как пользоваться</b><small>что куда вписывать</small></button>
               </div>
             </div>
           </div>
@@ -163,7 +168,10 @@
   <script src="data/config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script>
+    // supabase-js нужен только для общего сервера; без ключей в data/config.js не грузим лишние ~100 КБ
+    (function () { var c = (window.RP_DATA || {}).config || {}; if (c.supabaseUrl && c.supabaseKey) document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"><\/script>'); })();
+  </script>
   <script src="js/engine.js"></script>
   <script src="js/remote.js"></script>
   <script src="js/figure.js"></script>

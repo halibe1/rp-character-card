@@ -925,3 +925,35 @@ body.is-capturing { cursor: progress; }
 .ab-temp.cold { color: #ddd6fe; text-shadow: 0 0 10px rgba(167, 139, 250, .6); }
 #welcome .modal-box { height: auto; }
 .ab-num { white-space: nowrap; }
+
+/* ================= полировка дизайна ================= */
+/* шапка: одна главная кнопка, остальное в меню */
+.more-menu { width: 300px; }
+.more-menu .file-item { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; color: var(--a4); }
+.more-menu .file-item:hover, .more-menu .file-item:focus-within { background: rgba(124, 58, 237, .25); border-color: var(--line-strong); }
+.char-actions { align-items: center; }
+.badge { white-space: nowrap; }
+.top-badges { flex-wrap: nowrap; }
+@media (max-width: 1240px) { .top-badges { flex-wrap: wrap; } }
+
+/* тестовый бафф — свёрнут, не спорит с главным индикатором */
+.test-buff { display: block; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.test-buff > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; color: var(--text-3); }
+.test-buff > summary::-webkit-details-marker { display: none; }
+.test-buff > summary::before { content: "▸"; color: var(--a3); margin-right: -2px; }
+.test-buff[open] > summary::before { content: "▾"; }
+.test-buff > summary:hover { color: var(--text-2); }
+.test-buff .row2 { margin-top: 8px; }
+
+/* способности: плюсы и минусы обычным весом, ширина текста как у описания */
+.ab-pc { color: var(--text-2); }
+.ab-pc > div { font-weight: 400; max-width: 78ch; }
+.abx-text b, .ab-pc b { color: #fff; }
+
+/* док разделов: ровная сетка на телефоне */
+@media (max-width: 640px) {
+  .dock { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 2px; }
+  .dock button { justify-content: center; }
+  .more-menu, .shot-menu { width: min(300px, calc(100vw - 32px)); }
+  #more .shot-menu { left: auto; right: 0; }
+}

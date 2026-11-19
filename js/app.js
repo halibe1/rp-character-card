@@ -238,9 +238,9 @@
         return '<div' + tipAttr(RULES.stats[s].label, 'текущее ' + fmt(p.current, 1) + ' / естеств. максимум ' + fmt(p.natural, 1) + ' = ×' + fmt(p.ratio, 2), esc(p.zone.label) + (p.harmless ? '<br>Реакция не вредит телу при превышении.' : '')) + '>' + esc(RULES.stats[s].short) + '<b>×' + fmt(p.ratio, 2) + '</b></div>';
       }).join('') + '</div>' +
       (L.reactionWarning ? '<div class="limit-warn">⚠ ' + esc(L.reactionWarning) + '</div>' : '') +
-      '<div class="test-buff"><label for="testBuff">Тест: внешний бафф на все физ. статы</label><output>+' + view.testBuff + '%</output>' +
+      '<details class="test-buff"' + (testOpen || view.testBuff ? ' open' : '') + '><summary>Проверить чужой бафф на все физ. статы <output>+' + view.testBuff + '%</output></summary>' +
       '<div class="row2"><input type="range" id="testBuff" min="0" max="500" step="10" value="' + view.testBuff + '" aria-label="Тестовый бафф, %">' +
-      '<select id="testSource" aria-label="Источник"><option value="external"' + (view.testSource === 'external' ? ' selected' : '') + '>внешний</option><option value="artifact"' + (view.testSource === 'artifact' ? ' selected' : '') + '>артефакт</option></select></div></div>';
+      '<select id="testSource" aria-label="Источник"><option value="external"' + (view.testSource === 'external' ? ' selected' : '') + '>внешний</option><option value="artifact"' + (view.testSource === 'artifact' ? ' selected' : '') + '>артефакт</option></select></div></details>';
   }
   function updateLimitInPlace() {
     var L = R.derived.limit, w = L.worst, max = L.thresholds[2].at + 1;
@@ -278,7 +278,7 @@
   function drow(label, value, unit, sub, title, formula, extra, cls) {
     return '<div class="drow' + (cls ? ' ' + cls : '') + '"' + tipAttr(title || label, formula, extra) + '><span class="drl">' + esc(label) + '</span><span class="drv">' + value + (unit ? '<small>' + esc(unit) + '</small>' : '') + '</span>' + (sub ? '<span class="drs">' + sub + '</span>' : '') + '</div>';
   }
-  var dmoreOpen = true;
+  var dmoreOpen = true, testOpen = false;
 
   function renderDerived() {
     var d = R.derived, mt = d.meleeTiming, sm = d.stamina;
@@ -427,7 +427,7 @@
       '<div class="field-row"><label class="field">Зона<select id="cZone">' + Object.keys(zones).map(function (z) { return '<option value="' + z + '"' + (z === calcState.zone ? ' selected' : '') + '>' + esc(zones[z].label) + '</option>'; }).join('') + '</select></label>' +
       '<div class="field">Быстрый выбор<div style="display:flex;gap:6px">' + RULES.durability.presetTargets.map(function (p) { return '<button class="mini-btn" data-preset="' + p + '">' + fmt(p, 0) + '</button>'; }).join('') + '</div></div></div>' +
       '<div class="table-wrap" id="cWoundsOut"></div>' +
-      '<h3 style="margin-top:18px">Сводка: лучшая степень по целям</h3><div class="table-wrap" id="cMatrix"></div></div>' +
+      '<h3 style="margin-top:28px">Сводка: лучшая степень по целям</h3><div class="table-wrap" id="cMatrix"></div></div>' +
       '<div class="calc" style="grid-column:1/-1"><h3>Что если</h3><div class="sub">Временные бонусы: ничего не сохраняется, персонаж не меняется. Сравнение идёт в режиме «' + esc(RULES.modes[wiMode()].label) + '»' + (view.wounds.length ? ' с ранениями' : '') + '.</div>' +
       '<div class="wi-form">' +
       '<label class="field">Параметр<select id="wStat">' + opts(STAT_OPTS, 'punch') + '</select></label>' +
@@ -1103,13 +1103,22 @@ function allocEditor(a, base, i) {
       }).catch(function (err) {
         console.error(err);
         toast('Скриншот не получился: ' + err.message);
-      }).then(function () { btn.disabled = false; btn.textContent = '📷 Скриншот персонажа'; });
+      }).then(function () { btn.disabled = false; btn.textContent = '📷 Скриншот'; });
     });
+    // меню «Данные»: новый персонаж, бэкап, загрузка, справка
+    var mb = $('#btnMore'), mm = $('#moreMenu');
+    function setMore(v) { mm.hidden = !v; mb.setAttribute('aria-expanded', v ? 'true' : 'false'); }
+    mb.addEventListener('click', function (e) { e.stopPropagation(); setMore(mm.hidden); if (!mm.hidden) mm.querySelector('button').focus(); });
+    document.addEventListener('click', function (e) { if (!e.target.closest('#more')) setMore(false); });
+    mm.addEventListener('keydown', function (e) { if (e.key === 'Escape') { setMore(false); mb.focus(); } });
+    mm.addEventListener('click', function (e) { if (e.target.closest('button')) setMore(false); });
+    $('#restoreFile').addEventListener('change', function () { setMore(false); });
   }
 
   /* ================= события главного экрана ================= */
 
   function bind() {
+    $('#limitCard').addEventListener('toggle', function (e) { if (e.target.classList && e.target.classList.contains('test-buff')) testOpen = e.target.open; }, true);
     $('#derivedGrid').addEventListener('toggle', function (e) { if (e.target.classList && e.target.classList.contains('dmore')) dmoreOpen = e.target.open; }, true);
     $('#modalBody').addEventListener('keydown', function (e) {
       var tg = e.target.closest && e.target.closest('[data-ab-toggle]');
