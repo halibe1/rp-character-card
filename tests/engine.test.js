@@ -454,5 +454,14 @@ test('подъём отдельной меткой: {подъём 50%} = 200 × 
   const m = upg('{подъём 50%}', {}, 0); near(m.lines[0].value, 300, 1e-6);
 });
 
+section('Эффект на все статы цели');
+test('{дебафф все 40%}: 100 AP дают 20% ÷ 4 = +5% (40% → 45%)', () => {
+  const m = upg('Цель получает {дебафф все 40%}.', { statusAll: 100 }, 100);
+  near(m.lines[0].percentNow, 45, 1e-9); assert.strictEqual(m.lines[0].effAll, true); assert.deepStrictEqual(m.targets, ['statusAll']);
+});
+test('бафф на все статы тоже делится на 4; обычный {бафф 30%} остаётся отдельным пунктом (+20%)', () => {
+  const m = upg('{бафф на все статы 30%} и {бафф 30%}', { statusAll: 100, status: 100 }, 200);
+  near(m.lines[0].percentNow, 35, 1e-9); near(m.lines[1].percentNow, 50, 1e-9); assert.deepStrictEqual(m.targets, ['status', 'statusAll']);
+});
 console.log('\n' + (failed ? '✗ ПРОВАЛЕНО: ' + failed + ', ' : '') + 'пройдено: ' + passed + ' из ' + (passed + failed));
 process.exit(failed ? 1 : 0);
