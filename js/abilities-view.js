@@ -26,7 +26,7 @@
         else if (ap) eff = '+' + fmt(ap / U.stepAp * U.physPercentPerStep, 1) + '% (в описании нет метки)';
         return '<div class="upg-row' + (key === mark ? ' me' : '') + '"><span>' + kv[1] + '</span><b>' + fmt(ap, 0) + ' AP</b><span class="upg-eff">' + eff + '</span></div>';
       }).join('');
-      return '<div class="upg"><div class="upg-h">Вложено в способность: ' + fmt(a.allocTotal, 0) + ' из ' + fmt(a.ap, 0) + ' AP' + (a.allocFree > 0 ? ' · свободно ' + fmt(a.allocFree, 0) : '') + (a.allocFree < 0 ? ' · <em>вложено больше, чем AP способности</em>' : '') + '</div>' + rows + '</div>';
+      return '<div class="upg"><div class="upg-h">Вложено в способность: ' + fmt(a.allocTotal + (a.childAp || 0), 0) + ' из ' + fmt(a.ap, 0) + ' AP' + (a.childAp ? ' (в подспособности ' + fmt(a.childAp, 0) + ')' : '') + (a.allocFree > 0 ? ' · свободно ' + fmt(a.allocFree, 0) : '') + (a.allocFree < 0 ? ' · <em>вложено больше, чем AP способности</em>' : '') + '</div>' + rows + '</div>';
     }
     function effHtml(l, a) {
       var deb = l.effect === 'debuff', uq = l.effect === 'unique', up = l.bonusPp > 0, mark = deb ? '÷' : '×';
@@ -87,6 +87,7 @@
         else eff = '+' + fmt(a.alloc[key] / U.stepAp * U.physPercentPerStep, 1) + '%';
         return '<span class="upg-chip">' + kv[1] + ' <b>' + fmt(a.alloc[key], 0) + ' AP</b> <small>' + eff + '</small></span>';
       });
+      if (a.childAp) parts.push('<span class="upg-chip">Подспособности <b>' + fmt(a.childAp, 0) + ' AP</b></span>');
       return '<div class="upg-line" ' + tipAttr('Прокачка', null, allocBlock(a, '')).slice(1) + '>' + (parts.length ? parts.join('') : '<span class="hint">AP ещё не распределены</span>') +
         ' <small>' + (a.allocFree !== 0 ? (a.allocFree > 0 ? 'свободно ' + fmt(a.allocFree, 0) + ' AP' : 'перебор ' + fmt(-a.allocFree, 0) + ' AP') : 'всё распределено') + '</small></div>';
     }

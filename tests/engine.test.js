@@ -474,5 +474,20 @@ test('счётчик не зависит от силы атрибута и ст�
   c.abilities = [{ id: 'a', name: 'A', description: '{уник 100%}', ap: 0, alloc: {} }];
   near(run(c, 'passive').derived.abilities[0].lines[0].percentNow, 100, 1e-9);
 });
+section('AP подспособностей берутся из пула родителя');
+test('родитель 1800 AP: 900 в реакцию + 900 в подспособность → свободно 0', () => {
+  const c = clone(KENOS);
+  c.abilities = [
+    { id: 'p', name: 'P', description: '{реакция 100%}', ap: 1800, alloc: { reaction: 900 } },
+    { id: 'k', parentId: 'p', name: 'K', description: '{реакция 0.5}', ap: 900, alloc: {} }
+  ];
+  const r = run(c, 'base').derived.abilities, p = r.find(a => a.id === 'p'), k = r.find(a => a.id === 'k');
+  near(p.childAp, 900, 1e-9); near(p.allocFree, 0, 1e-9); near(k.allocFree, 900, 1e-9);
+});
+test('если в подспособности больше, чем осталось у родителя, показывается перебор', () => {
+  const c = clone(KENOS);
+  c.abilities = [{ id: 'p', name: 'P', description: '{реакция 100%}', ap: 1000, alloc: { reaction: 900 } }, { id: 'k', parentId: 'p', name: 'K', description: '', ap: 300 }];
+  near(run(c, 'base').derived.abilities.find(a => a.id === 'p').allocFree, -200, 1e-9);
+});
 console.log('\n' + (failed ? '✗ ПРОВАЛЕНО: ' + failed + ', ' : '') + 'пройдено: ' + passed + ' из ' + (passed + failed));
 process.exit(failed ? 1 : 0);

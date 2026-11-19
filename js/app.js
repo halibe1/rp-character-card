@@ -634,12 +634,13 @@
 }
 function allocHint(a) {
   var U = RULES.abilities.upgrade, ap = parseFloat(a.ap) || 0, al = normAlloc(a.alloc), tg = E.abilityTargets(a, RULES), tot = 0, parts = [];
+  var kids = 0; ((draft && draft.abilities) || []).forEach(function (c) { if (c.parentId === a.id && c !== a) kids += parseFloat(c.ap) || 0; });
   tg.forEach(function (k) { tot += al[k]; });
   tg.forEach(function (k) {
     if (!al[k]) return;
     parts.push(ALLOC_LABEL[k].toLowerCase() + ' ' + E.upgradeText(k, al[k], RULES));
   });
-  return 'Вложено ' + fmt(tot, 0) + ' из ' + fmt(ap, 0) + ' AP' + (tot < ap ? ' · свободно ' + fmt(ap - tot, 0) : '') + (tot > ap ? ' · <b class="bad">больше, чем AP способности</b>' : '') + (parts.length ? ' — ' + parts.join(', ') : '');
+  return 'Вложено ' + fmt(tot + kids, 0) + (kids ? ' (в подспособности ' + fmt(kids, 0) + ')' : '') + ' из ' + fmt(ap, 0) + ' AP' + (tot + kids < ap ? ' · свободно ' + fmt(ap - tot - kids, 0) : '') + (tot + kids > ap ? ' · <b class="bad">больше, чем AP способности</b>' : '') + (parts.length ? ' — ' + parts.join(', ') : '');
 }
 function allocEditor(a, base, i) {
   var U = RULES.abilities.upgrade, tg = E.abilityTargets(a, RULES);
@@ -939,7 +940,13 @@ function allocEditor(a, base, i) {
       if (!p) return;
       setPath(draft, p, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
       var am = /^abilities\.(\d+)\.(ap|alloc\.)/.exec(p);
-      if (am && draft.abilities[+am[1]]) { var hint = e.target.closest('.ab-edit').querySelector('.ab-alloc-hint'); if (hint) hint.innerHTML = allocHint(draft.abilities[+am[1]]); }
+      if (am && draft.abilities[+am[1]]) {
+        // подпись «вложено / свободно» есть у каждой способности, а AP подспособностей входят в пул родителя — обновляем все
+        $$('#editorBody .ab-alloc-hint').forEach(function (h) {
+          var ed = h.closest('.ab-edit'), f = ed && ed.querySelector('[data-f^="abilities."]'), mm = f && /^abilities\.(\d+)\./.exec(f.getAttribute('data-f'));
+          if (mm && draft.abilities[+mm[1]]) h.innerHTML = allocHint(draft.abilities[+mm[1]]);
+        });
+      }
       if (p === 'name') $('#editorTitle').textContent = (editingNew ? 'Новый персонаж · ' : 'Персонаж · ') + e.target.value;
     });
     body.addEventListener('toggle', function (e) {

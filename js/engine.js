@@ -535,7 +535,13 @@
       busy[a.id] = false; done[a.id] = res;
       return res;
     }
-    return items.map(build).filter(Boolean);
+    var out = items.map(build).filter(Boolean);
+    // AP, вложенные в подспособности, берутся из пула родителя: они уже «потрачены» и не считаются свободными
+    out.forEach(function (r) {
+      var kids = 0; out.forEach(function (c) { if (c.parentId === r.id) kids += c.ap; });
+      r.childAp = kids; r.allocFree = r.ap - r.allocTotal - kids;
+    });
+    return out;
   }
   /* ---------- калькуляторы ---------- */
 
