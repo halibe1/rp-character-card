@@ -175,8 +175,11 @@
     "stats": {
       "speed":      { "label": "Скорость",   "unit": "км/ч", "scope": "speed",  "aliases": ["скорость"] },
       "durability": { "label": "Прочность",  "unit": "кг",   "scope": "power", "aliases": ["прочность"] },
-      "punch":      { "label": "Сила удара", "unit": "кг",   "scope": "power", "aliases": ["сила", "сила удара", "удар"] }
-    }
+      "punch":      { "label": "Сила удара", "unit": "кг",   "scope": "power", "aliases": ["сила", "сила удара", "удар"] },
+      "lift":       { "label": "Сила на подъём", "unit": "кг", "scope": "power", "aliases": ["подъём", "подъем", "сила на подъём", "сила на подъем"] },
+      "reaction":   { "label": "Реакция",    "unit": "мс",   "scope": "speed",  "betterLower": true, "aliases": ["реакция"] }
+    },
+    "allStats": ["punch", "lift", "speed", "reaction"]
   },
 
   "maxTraits": 8

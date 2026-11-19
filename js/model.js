@@ -46,8 +46,8 @@
       parentId: String(a.parentId || ''), fixedCost: a.fixedCost === true, alloc: normAlloc(a.alloc), pros: normList(a.pros), cons: normList(a.cons), ap: a.ap === undefined || a.ap === '' ? 0 : a.ap,
       entryCost: a.entryCost === undefined ? null : a.entryCost, upkeepCost: a.upkeepCost === undefined ? null : a.upkeepCost,
       images: (Array.isArray(a.images) ? a.images : []).filter(function (u) { return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u); }).slice(0, RULES.abilities.maxImages || 6) };
-  }  var ALLOC_KEYS = ['punch', 'speed', 'durability', 'status', 'radius', 'other', 'heat', 'cold'];
-  var ALLOC_LABEL = { punch: 'Сила удара', speed: 'Скорость', durability: 'Прочность', radius: 'Радиус / дальность', other: 'Прочие числа', status: 'Эффект на цель (бафф / дебафф)', heat: 'Нагрев, °C', cold: 'Охлаждение, °C' };
+  }  var ALLOC_KEYS = ['punch', 'lift', 'speed', 'reaction', 'durability', 'all', 'status', 'radius', 'other', 'heat', 'cold'];
+  var ALLOC_LABEL = { punch: 'Сила удара', speed: 'Скорость', durability: 'Прочность', radius: 'Радиус / дальность', other: 'Прочие числа', lift: 'Сила на подъём', reaction: 'Реакция', all: 'Все статы (удар, подъём, скорость, реакция)', status: 'Эффект на цель (бафф / дебафф)', heat: 'Нагрев, °C', cold: 'Охлаждение, °C' };
   function normList(v) { return (Array.isArray(v) ? v : []).map(function (x) { return String(x == null ? '' : x); }); }
   function normAlloc(al) {
     var o = {}; ALLOC_KEYS.forEach(function (k) { var v = al ? parseFloat(al[k]) : 0; o[k] = isFinite(v) && v > 0 ? v : 0; }); return o;

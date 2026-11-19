@@ -435,15 +435,24 @@ test('AP нельзя вложить в температуру, которой �
   const m = upg('Просто текст', { heat: 100 }, 100); assert.strictEqual(m.alloc.heat, 0);
 });
 section('Метка «все статы»');
-test('{все 40%} раскрывается в баф на силу удара, скорость и прочность', () => {
+test('{все 40%} = сила удара, подъём, скорость и реакция; прочность не входит', () => {
   const m = upg('Повышает {все 40%}.', {}, 0);
-  assert.deepStrictEqual(m.lines.map(l => l.key).sort(), ['durability', 'punch', 'speed']);
-  near(m.lines.find(l => l.key === 'punch').value, 1400, 1e-6); near(m.lines.find(l => l.key === 'speed').value, 14, 1e-6);
-  assert.deepStrictEqual(m.targets, ['punch', 'speed', 'durability']);
+  assert.deepStrictEqual(m.lines.map(l => l.key).sort(), ['lift', 'punch', 'reaction', 'speed']);
+  near(m.lines.find(l => l.key === 'punch').value, 1400, 1e-6); near(m.lines.find(l => l.key === 'lift').value, 280, 1e-6);
+  near(m.lines.find(l => l.key === 'speed').value, 14, 1e-6); near(m.lines.find(l => l.key === 'reaction').value, 230 / 1.4, 1e-6);
+  assert.deepStrictEqual(m.targets, ['all']);
 });
-test('{all x2} и {все статы 100%} дают то же; прокачка делится по показателям отдельно', () => {
-  const m = upg('{все статы 100%}', { speed: 100 }, 100);
-  near(m.lines.find(l => l.key === 'speed').percentNow, 130, 1e-9); near(m.lines.find(l => l.key === 'punch').percentNow, 100, 1e-9);
+test('100 AP в «все статы» дают +7.5% каждому из четырёх показателей (30% ÷ 4)', () => {
+  const m = upg('{все статы 100%}', { all: 100 }, 100);
+  m.lines.forEach(l => near(l.percentNow, 107.5, 1e-9));
+  near(m.alloc.all, 100, 1e-9);
 });
+test('реакция в способности: баф делит мс (+100% → 230 ÷ 2 = 115)', () => {
+  const m = upg('{реакция 100%}', {}, 0); near(m.lines[0].value, 115, 1e-6);
+});
+test('подъём отдельной меткой: {подъём 50%} = 200 × 1.5', () => {
+  const m = upg('{подъём 50%}', {}, 0); near(m.lines[0].value, 300, 1e-6);
+});
+
 console.log('\n' + (failed ? '✗ ПРОВАЛЕНО: ' + failed + ', ' : '') + 'пройдено: ' + passed + ' из ' + (passed + failed));
 process.exit(failed ? 1 : 0);

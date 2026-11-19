@@ -924,3 +924,4 @@ body.is-capturing { cursor: progress; }
 .ab-temp.heat { color: #f5d0fe; text-shadow: 0 0 10px rgba(232, 121, 249, .55); }
 .ab-temp.cold { color: #ddd6fe; text-shadow: 0 0 10px rgba(167, 139, 250, .6); }
 #welcome .modal-box { height: auto; }
+.ab-num { white-space: nowrap; }

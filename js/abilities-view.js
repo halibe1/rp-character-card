@@ -10,8 +10,8 @@
     var R = ctx.R, ch = ctx.ch, view = ctx.view, canEdit = ctx.canEdit, abOpen = ctx.abOpen;
     var list = R.derived.abilities, pw = R.derived.mods.attrPower;
     function pctTxt(v) { return fmt(v, v % 1 ? 1 : 0) + '%'; }
-    var UPG_KEYS = [['radius', 'Радиус / дальность'], ['other', 'Прочие числа'], ['punch', 'Сила удара'], ['speed', 'Скорость'], ['durability', 'Прочность'], ['status', 'Эффект на цель'], ['heat', 'Нагрев, °C'], ['cold', 'Охлаждение, °C']];
-    var EXTRA = { status: 1, heat: 1, cold: 1 };
+    var UPG_KEYS = [['radius', 'Радиус / дальность'], ['other', 'Прочие числа'], ['punch', 'Сила удара'], ['speed', 'Скорость'], ['durability', 'Прочность'], ['lift', 'Сила на подъём'], ['reaction', 'Реакция'], ['all', 'Все статы'], ['status', 'Эффект на цель'], ['heat', 'Нагрев, °C'], ['cold', 'Охлаждение, °C']];
+    var EXTRA = { status: 1, heat: 1, cold: 1, all: 1 };
     function gainTxt(key, ap) { return window.RPEngine.upgradeText(key, ap, RULES); }
     function mulTxt(f, pctVal) { return '×' + fmt(f, 2) + (pctVal === undefined ? '' : '<small>(' + pctTxt(pctVal) + ')</small>'); }
     /** Сколько AP вложено в каждый показатель способности и как изменился множитель (было → стало). */
@@ -19,7 +19,7 @@
       if ((!a.ap && !a.allocTotal) || !a.targets.length) return '';
       var U = RULES.abilities.upgrade, rows = UPG_KEYS.filter(function (kv) { return a.targets.indexOf(kv[0]) !== -1; }).map(function (kv) {
         var key = kv[0], ap = a.alloc[key] || 0, l = a.lines.filter(function (x) { return x.key === key; })[0], eff = '';
-        if (EXTRA[key]) eff = gainTxt(key, ap) + (key === 'status' ? ' к проценту бафа / дебафа' : ' к максимуму');
+        if (EXTRA[key]) eff = gainTxt(key, ap) + (key === 'status' ? ' к проценту бафа / дебафа' : key === 'all' ? ' к каждому из 4 показателей (удар, подъём, скорость, реакция)' : ' к максимуму');
         else if (key === 'radius' || key === 'other') eff = mulTxt(1) + ' → ' + mulTxt(1 + ap / U.stepAp * U.distancePercentPerStep / 100) + ' (+' + fmt(ap / U.stepAp * U.distancePercentPerStep, 1) + '% от начального)';
         else if (l && l.child) eff = mulTxt(l.k0) + ' → ' + mulTxt(l.k) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
         else if (l) eff = mulTxt(l.factor, l.percent) + ' → ' + mulTxt(l.factorNow, l.percentNow) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
@@ -35,7 +35,7 @@
     }
     function numHtml(l, a) {
       if (l.kind === 'effect') return effHtml(l, a);
-      var val = fmt(l.value, l.key === 'speed' ? 1 : 0) + ' ' + esc(l.unit);
+      var val = fmt(l.value, l.key === 'speed' || l.key === 'reaction' ? 1 : 0) + ' ' + esc(l.unit);
       var body, extra;
       if (l.child) {
         body = '×' + fmt(l.k, 2) + (l.bonusPp > 0 ? ' <span class="ab-was">(было ×' + fmt(l.k0, 2) + ')</span>' : '');
@@ -48,7 +48,7 @@
           (upg ? ', с прокачкой (' + fmt(l.allocAp, 0) + ' AP): <b>×' + fmt(l.factorNow, 2) + ' (' + pctTxt(l.percentNow) + ')</b>, без прокачки было бы ' + fmt(l.valueNoUpgrade, 0) + ' ' + esc(l.unit) : '') + '.' +
           (up ? '<br>Сила атрибута ×' + fmt(l.power, 2) + ' усиливает процент: ' + pctTxt(l.percentNow) + ' → ' + pctTxt(l.effPercent) + ' (×' + fmt(l.effFactor, 2) + ').' : '');
       }
-      extra = 'Множитель: <b>' + body + '</b>' + (l.ms !== undefined ? '<br>' + fmt(l.ms, 1) + ' м/с' : '') + '<br>' + extra + allocBlock(a, l.key);
+      extra = 'Множитель: <b>' + body + '</b>' + (l.ms !== undefined ? '<br>' + fmt(l.ms, 1) + ' м/с' : '') + '<br>' + extra + allocBlock(a, l.pool || l.key);
       var mul = l.child ? l.k : l.effFactor;
       return '<span class="ab-num"' + tipAttr(l.label, l.formula, extra) + '>' + val + (l.bonusPp > 0 ? '<span class="ab-up" title="прокачано">▲</span>' : '') + '<span class="ab-mul">×' + fmt(mul, 2) + '</span></span>';
     }

@@ -307,7 +307,7 @@
     d.progress = { martial: martialProgress(num(ch.sp, 0), rules), ap: apProgress(num(ch.ap, 0), rules) };
 
     /* способности атрибута: статы считаются от текущих статов персонажа */
-    d.abilities = abilityStats(ch.abilities, { punch: S('punch'), speed: S('speed'), durability: d.durability.value }, mods.attrPower, ch.ap, rules);
+    d.abilities = abilityStats(ch.abilities, { punch: S('punch'), speed: S('speed'), durability: d.durability.value, lift: S('lift'), reaction: S('reaction') }, mods.attrPower, ch.ap, rules);
 
     return { mode: mode, modeLabel: rules.modes[mode].label, stats: stats, derived: d };
   }
@@ -327,7 +327,7 @@
    */
   /** Слова-метки «на все показатели»: {все 40%}, {all 40%}, {все статы 40%}. */
   var ALL_WORDS = ['all', 'все', 'всё', 'все статы', 'статы', 'все показатели', 'физа'];
-  function parseAbilityText(text, defs, effects) {
+  function parseAbilityText(text, defs, effects, allStats) {
     var map = {}, eff = {};
     Object.keys(defs).forEach(function (k) { [k].concat(defs[k].aliases || []).forEach(function (al) { map[al.toLowerCase()] = k; }); });
     Object.keys(effects || {}).forEach(function (k) { [k].concat(effects[k].aliases || []).forEach(function (al) { eff[al.toLowerCase()] = k; }); });
@@ -339,11 +339,11 @@
       if (!key && !effKind && !isAll) continue;
       if (m.index > last) segs.push({ text: text.slice(last, m.index) });
       if (isAll) {
-        // «все статы»: метка раскрывается в бафф на каждый показатель (сила удара, скорость, прочность)
+        // «все статы»: метка раскрывается в бафф на сила удара, подъём, скорость и реакцию (прочность не входит)
         var mk = m[2] ? 'x' : (m[4] ? '%' : ''), nv = parseFloat(m[3].replace(',', '.'));
-        Object.keys(defs).forEach(function (k, ix) {
+        (allStats || Object.keys(defs).filter(function (k) { return k !== 'durability'; })).filter(function (k) { return defs[k]; }).forEach(function (k, ix) {
           segs.push({ text: (ix ? ', ' : '') + String(defs[k].label || k).toLowerCase() + ' ' });
-          segs.push({ token: { key: k, effect: '', num: nv, mark: mk, src: m[0] } });
+          segs.push({ token: { key: k, effect: '', num: nv, mark: mk, src: m[0], viaAll: true } });
         });
         last = re.lastIndex;
         continue;
@@ -371,11 +371,12 @@
    * Куда можно вложить AP в способности: показатели из меток ({speed …}, {punch …}), «радиус» — если в тексте есть
    * масштабируемые числа-расстояния, «other» — прочие масштабируемые числа (кг, км/ч, {~ …}). Числа с замочком {= …} не считаются.
    */
-  var ALLOC_ORDER = ['punch', 'speed', 'durability', 'status', 'radius', 'other', 'heat', 'cold'];
+  var ALLOC_ORDER = ['punch', 'lift', 'speed', 'reaction', 'durability', 'all', 'status', 'radius', 'other', 'heat', 'cold'];
   /** Что даёт вложение AP в показатель: число (процентные пункты, множитель или градусы). */
   function upgradeGain(key, ap, rules) {
     var u = rules.abilities.upgrade, s = (ap || 0) / u.stepAp;
     if (key === 'status') return s * u.statusPercentPerStep;
+    if (key === 'all') return s * u.physPercentPerStep / ((rules.abilities.allStats || [1, 2, 3, 4]).length);
     if (key === 'heat') return s * u.heatPerStep;
     if (key === 'cold') return s * u.coldPerStep;
     if (key === 'radius' || key === 'other') return s * u.distancePercentPerStep;
@@ -393,8 +394,8 @@
     var defs = rules.abilities.stats, keys = [], dummy = { base: 100, scopes: {} };
     Object.keys(rules.scopes).forEach(function (sc) { dummy.scopes[sc] = { value: 100 }; });
     function add(k) { if (keys.indexOf(k) === -1) keys.push(k); }
-    parseAbilityText(text, defs, rules.abilities.effects).forEach(function (s) {
-      if (s.token) { add(s.token.key); return; }
+    parseAbilityText(text, defs, rules.abilities.effects, rules.abilities.allStats).forEach(function (s) {
+      if (s.token) { add(s.token.viaAll ? 'all' : s.token.key); return; }
       expandPlain(s.text, dummy, rules, {}).forEach(function (x) { if (x.scaled) add(x.scaled.scope === 'radius' ? 'radius' : 'other'); if (x.temp) add(x.temp.key); });
     });
     var order = ALLOC_ORDER;
@@ -476,7 +477,7 @@
       var targets = abilityTargets(a, rules), alloc = {};
       ALLOC_ORDER.forEach(function (k) { var v = a.alloc ? parseFloat(a.alloc[k]) : 0; alloc[k] = targets.indexOf(k) !== -1 && isFinite(v) && v > 0 ? v : 0; });
       var temps = [];
-      function segsFor(text) { var raw = parseAbilityText(text, defs, rules.abilities.effects).map(function (s) {
+      function segsFor(text) { var raw = parseAbilityText(text, defs, rules.abilities.effects, rules.abilities.allStats).map(function (s) {
         if (!s.token) return s;
         var tk = s.token;
         if (tk.effect) {
@@ -486,25 +487,26 @@
           lines.push(el);
           return { line: el };
         }
-        var def = defs[tk.key], line = { key: tk.key, label: def.label, unit: def.unit, src: tk.src };
+        var def = defs[tk.key], pool = tk.viaAll ? 'all' : tk.key, low = !!def.betterLower, line = { key: tk.key, pool: pool, label: def.label, unit: def.unit, src: tk.src, viaAll: !!tk.viaAll, betterLower: low };
         if (parent) {
           var pl = parent.lines.filter(function (l) { return l.key === tk.key; })[0];
           if (!pl) return { text: tk.src, missing: true };
           var k0 = tk.mark === '%' ? tk.num / 100 : tk.num;
-          var bonusPp = alloc[tk.key] / U.stepAp * U.physPercentPerStep, k = k0 + bonusPp / 100;
-          line.child = true; line.parentName = parent.name; line.k0 = k0; line.k = k; line.bonusPp = bonusPp; line.allocAp = alloc[tk.key];
-          line.base = pl.value; line.value = pl.value * k; line.valueNoUpgrade = pl.value * k0;
-          line.formula = n(pl.value, 1) + ' × ' + n(k, 3) + (bonusPp ? ' (' + n(k0, 3) + ' + ' + n(bonusPp, 2) + '% прокачки)' : '') + ' (от «' + parent.name + '») = ' + n(line.value, 1) + ' ' + def.unit;
+          var bonusPp = upgradeGain(pool, alloc[pool], rules), k = k0 + bonusPp / 100;
+          line.child = true; line.parentName = parent.name; line.k0 = k0; line.k = k; line.bonusPp = bonusPp; line.allocAp = alloc[pool];
+          line.base = pl.value; line.value = low ? pl.value / k : pl.value * k; line.valueNoUpgrade = low ? pl.value / k0 : pl.value * k0;
+          line.formula = n(pl.value, 1) + (low ? ' ÷ ' : ' × ') + n(k, 3) + (bonusPp ? ' (' + n(k0, 3) + ' + ' + n(bonusPp, 2) + '% прокачки)' : '') + ' (от «' + parent.name + '») = ' + n(line.value, 1) + ' ' + def.unit;
         } else {
           var pct = tk.mark === 'x' ? (tk.num - 1) * 100 : tk.num;
           var F = power.scopes[def.scope].value / power.base;
-          var bonusPp = alloc[tk.key] / U.stepAp * U.physPercentPerStep, pctNow = pct + bonusPp;
+          var bonusPp = upgradeGain(pool, alloc[pool], rules), pctNow = pct + bonusPp;
           line.percent = pct; line.factor = 1 + pct / 100; line.power = F;
-          line.bonusPp = bonusPp; line.allocAp = alloc[tk.key]; line.percentNow = pctNow; line.factorNow = 1 + pctNow / 100;
+          line.bonusPp = bonusPp; line.allocAp = alloc[pool]; line.percentNow = pctNow; line.factorNow = 1 + pctNow / 100;
           line.effPercent = pctNow * F; line.effFactor = 1 + line.effPercent / 100;
-          line.base = user[tk.key]; line.value = user[tk.key] * line.effFactor; line.valuePlain = user[tk.key] * line.factorNow;
-          line.valueNoUpgrade = user[tk.key] * (1 + pct * F / 100);
-          line.formula = n(user[tk.key], 1) + ' × (1 + ' + n(pct, 1) + (bonusPp ? ' + ' + n(bonusPp, 2) + ' (прокачка)' : '') + '%' + (F !== 1 ? ' × ' + n(F, 3) + ' (сила атрибута)' : '') + ') = ' + n(user[tk.key], 1) + ' × ' + n(line.effFactor, 3) + ' = ' + n(line.value, 1) + ' ' + def.unit;
+          var ub = user[tk.key], dv = function (x) { return low ? ub / x : ub * x; };
+          line.base = ub; line.value = dv(line.effFactor); line.valuePlain = dv(line.factorNow);
+          line.valueNoUpgrade = dv(1 + pct * F / 100);
+          line.formula = n(ub, 1) + (low ? ' ÷ (1 + ' : ' × (1 + ') + n(pct, 1) + (bonusPp ? ' + ' + n(bonusPp, 2) + ' (прокачка)' : '') + '%' + (F !== 1 ? ' × ' + n(F, 3) + ' (сила атрибута)' : '') + ') = ' + n(ub, 1) + (low ? ' ÷ ' : ' × ') + n(line.effFactor, 3) + ' = ' + n(line.value, 1) + ' ' + def.unit;
         }
         if (tk.key === 'speed') line.ms = kmhToMs(line.value);
         lines.push(line);
