@@ -222,6 +222,6 @@
     "allStats": ["punch", "lift", "speed", "reaction"]
   },
 
-  "maxTraits": 8
+  "maxTraits": 0
 }
 ;

@@ -327,7 +327,7 @@
     $('#traitChips').innerHTML = traits.length ? traits.map(function (t) {
       return '<span class="chip"' + tipAttr(t.name, null, t.description ? esc(t.description) : '<span style="color:var(--text-3)">Описание не указано</span>') + '>' + esc(t.name) + '</span>';
     }).join('') : '<span class="empty-note">Трейтов нет.</span>';
-    $('#traitCount').textContent = traits.length + ' / ' + RULES.maxTraits;
+    $('#traitCount').textContent = traits.length + (RULES.maxTraits ? ' / ' + RULES.maxTraits : '');
   }
 
   /** Сила атрибута / боевого искусства на бейджах в шапке (с тултипом по аспектам). */
@@ -796,13 +796,13 @@ function allocEditor(a, base, i) {
       }).join('') : '<div class="empty-note">Нет стилей.</div>') +
       '<button type="button" class="mini-btn add" data-add="styles">+ стиль</button></section>' +
       // трейты
-      '<section class="ed-sec"><h3>Трейты <span class="count">' + nTraits + ' / ' + RULES.maxTraits + '</span></h3>' +
+      '<section class="ed-sec"><h3>Трейты <span class="count">' + nTraits + (RULES.maxTraits ? ' / ' + RULES.maxTraits : '') + '</span></h3>' +
       (nTraits ? d.traits.map(function (t, i) {
         return '<div class="row trait-row">' + inp('traits.' + i + '.name', t.name, 'text', ' placeholder="Название" aria-label="Название трейта"') +
           inp('traits.' + i + '.description', t.description, 'text', ' placeholder="описание (необязательно)" aria-label="Описание трейта"') +
           '<button type="button" class="x" data-del="traits.' + i + '" aria-label="Удалить">✕</button></div>';
       }).join('') : '<div class="empty-note">Нет трейтов.</div>') +
-      '<button type="button" class="mini-btn add" data-add="traits"' + (nTraits >= RULES.maxTraits ? ' disabled' : '') + '>' + (nTraits >= RULES.maxTraits ? 'максимум ' + RULES.maxTraits : '+ трейт') + '</button></section>' +
+      '<button type="button" class="mini-btn add" data-add="traits"' + (RULES.maxTraits && nTraits >= RULES.maxTraits ? ' disabled' : '') + '>' + (RULES.maxTraits && nTraits >= RULES.maxTraits ? 'максимум ' + RULES.maxTraits : '+ трейт') + '</button></section>' +
       '<section class="ed-sec ed-wide"><h3>Способности атрибута</h3><div class="sub">Описание пиши текстом, а число стата вставляй меткой: <code>{speed 910%}</code>, <code>{durability 280%}</code>, <code>{punch 910%}</code> (можно <code>x10.1</code>, по-русски <code>{скорость 910%}</code>). Бафф на все статы сразу (сила удара, подъём, скорость, реакция; прочность не входит): <code>{все 40%}</code>, за 100 AP он растёт на 7,5%. На экране метка превратится в <b>×10,1 (910%) → готовое значение</b>, посчитанное от текущих статов; сила атрибута усиливает процент. В подспособности метка — множитель от стата родителя: <code>{punch 0.5}</code> = половина. Остальные числа с единицами (<code>1 метр</code>, <code>15 м</code>, <code>20 кг</code>, <code>50 км/ч</code>) растут от силы атрибута сами; выдели число и нажми «🔒 не меняется» (оно обернётся в <code>{= 15 м}</code>), если оно не должно расти. «⚖ масштабировать» (<code>{~ 15 лучей}</code>) включает рост для числа без единицы. Не фиксированные траты снижаются каждые 100 AP (общих AP персонажа) на 5% от изначальных: изначально ≥10% — не ниже 5%, ≤5% — не ниже 0.5%.</div>' + abilityRows() + '</section>' +
       // бафы
       '<section class="ed-sec ed-wide"><h3>Бафы и дебафы</h3><div class="sub">Идут по секторам. Внутри сектора проценты <b>складываются</b> (Режим зверя +50% и Дух зверя +50% = +100%, ×2), сектора <b>перемножаются</b>: <b>Атрибут × Трейты × Стиль × Артефакты × Внешний</b>. Дебафф делит. В каждом секторе добавь эффект, назови его и укажи, что он бафает; «Пассивный» действует всегда, «Активный» — только в режиме «Активные». Артефакты и внешний сектор могут вывести тело за предел.</div>' + buffSectors() + '</section>' +
@@ -1051,7 +1051,7 @@ function allocEditor(a, base, i) {
       var add = t.closest('[data-add]');
       if (add) {
         var k = add.getAttribute('data-add');
-        if (k === 'traits' && draft.traits.length >= RULES.maxTraits) return;
+        if (k === 'traits' && RULES.maxTraits && draft.traits.length >= RULES.maxTraits) return;
         draft[k].push(k === 'styles' ? { name: '', strikeType: '' } : { name: '', description: '' });
         renderEditor();
         var rows = $$('#editorBody .' + (k === 'styles' ? 'style' : 'trait') + '-row input');

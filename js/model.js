@@ -24,7 +24,7 @@
     c.attribute = Object.assign(blankCharacter().attribute, c.attribute || {});
     c.stats = Object.assign(blankCharacter().stats, c.stats || {});
     ['styles', 'traits', 'buffs'].forEach(function (k) { if (!Array.isArray(c[k])) c[k] = []; });
-    c.traits = c.traits.slice(0, RULES.maxTraits);
+    if (RULES.maxTraits) c.traits = c.traits.slice(0, RULES.maxTraits);
     c.buffs = c.buffs.map(upgradeBuff);
     if (typeof c.gift !== 'string' || !(RULES.gifts || {})[c.gift]) c.gift = '';
     c.abilities = (Array.isArray(c.abilities) ? c.abilities : []).filter(function (a) { return a && typeof a === 'object'; }).slice(0, RULES.abilities.max).map(normAbility);
@@ -78,7 +78,7 @@
     if (c.stats.reaction < RULES.reaction.absoluteMs) c.stats.reaction = RULES.reaction.absoluteMs;
     ['ap', 'sp', 'weightKg', 'awakenings'].forEach(function (k) { c[k] = Math.max(0, n(c[k]) || 0); });
     c.styles = c.styles.filter(function (s) { return String(s.name || '').trim(); }).map(function (s) { return { name: s.name.trim(), strikeType: s.strikeType || '' }; });
-    c.traits = c.traits.filter(function (t) { return String(t.name || '').trim(); }).slice(0, RULES.maxTraits).map(function (t) { return { name: t.name.trim(), description: String(t.description || '').trim() }; });
+    c.traits = c.traits.filter(function (t) { return String(t.name || '').trim(); }).slice(0, RULES.maxTraits || undefined).map(function (t) { return { name: t.name.trim(), description: String(t.description || '').trim() }; });
     var ids = {};
     c.abilities = (c.abilities || []).filter(function (a) { return String(a.name || '').trim(); }).slice(0, RULES.abilities.max).map(function (a) {
       ids[String(a.id || '')] = true;
