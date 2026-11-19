@@ -198,11 +198,22 @@
       return Object.assign({}, b, { baseMagnitude: b.magnitude, powerFactor: pf[k], magnitude: b.magnitude * pf[k] });
     });
     var wd = woundDivisors(opts.wounds, rules);
+    /* одарённость: меняет саму базу (до бафов) */
+    var gift = (rules.gifts || {})[ch.gift || ''] || { label: '', effects: {} }, GE = gift.effects || {};
+    function giftBase(s, raw, lb) {
+      var v = raw, parts = [];
+      if (GE.baseFlat && GE.baseFlat[s]) { v += GE.baseFlat[s]; parts.push('+ ' + GE.baseFlat[s]); }
+      if (GE.baseImprove && GE.baseImprove[s]) { var k1 = GE.baseImprove[s]; v = lb ? v / k1 : v * k1; parts.push((lb ? '÷ ' : '× ') + k1); }
+      if (GE.baseDebuff && GE.baseDebuff[s]) { var k2 = 1 + GE.baseDebuff[s] / 100; v = lb ? v * k2 : v / k2; parts.push((lb ? '× ' : '÷ ') + n(k2, 3)); }
+      return { value: v, formula: parts.length ? n(raw, 1) + ' ' + parts.join(' ') + ' (' + gift.label.toLowerCase() + ') = ' + n(v, 1) : '' };
+    }
+    if (GE.woundDivisorReduce) Object.keys(wd).forEach(function (s) { if (wd[s].divisor > 1) wd[s].divisor = Math.max(1, wd[s].divisor - GE.woundDivisorReduce); });
 
     var stats = {};
     ALL.forEach(function (s) {
       var def = rules.stats[s], lb = def.betterLower;
-      var base = num(ch.stats && ch.stats[s], 0);
+      var rawBase = num(ch.stats && ch.stats[s], 0), gb = s === 'stamina' ? { value: rawBase, formula: '' } : giftBase(s, rawBase, lb);
+      var base = gb.value;
       var forStat = buffs.filter(function (b) { return appliesTo(b, s); });
       var modeBuffs = forStat.filter(function (b) { return inMode(b, mode, rules); });
       var cn = chain(base, modeBuffs, { stacking: stacking, lowerBetter: lb });
@@ -213,12 +224,12 @@
       var value = lb ? cn.value * wound.divisor : cn.value / wound.divisor;
       if (s === 'reaction') value = Math.max(rules.reaction.absoluteMs, value);
 
-      var formula = cn.formula + ' ' + def.unit;
+      var formula = (gb.formula ? gb.formula + ' → ' : '') + cn.formula + ' ' + def.unit;
       if (wound.divisor !== 1) formula += ' ' + (lb ? '×' : '÷') + ' ' + n(wound.divisor, 3) + ' (ранения) = ' + n(value, 1) + ' ' + def.unit;
 
       stats[s] = {
         key: s, label: def.label, unit: def.unit,
-        base: base, value: value, delta: value - base,
+        base: base, rawBase: rawBase, giftFormula: gb.formula, value: value, delta: value - base,
         multiplier: cn.factor, chain: cn, buffs: modeBuffs,
         woundDivisor: wound.divisor, lightWounds: wound.light,
         natural: natural,
@@ -246,10 +257,12 @@
 
     /* прочность */
     var dur = rules.durability;
-    var durRaw = S('punch') * dur.punchMultiplier, durBase = Math.max(dur.minimum, durRaw);
+    var durMin = GE.durabilityMin || dur.minimum, durPM = 1;
+    if (GE.durabilityPunchMultiplier && S('punch') * dur.punchMultiplier > durMin) durPM = GE.durabilityPunchMultiplier;
+    var durRaw = S('punch') * durPM * dur.punchMultiplier, durBase = Math.max(durMin, durRaw);
     var durChain = chain(durBase, modBuffs('durability', 'all'), { stacking: stacking });
-    d.durability = { value: durChain.value, base: durBase, chain: durChain,
-      formula: n(S('punch'), 1) + ' × ' + dur.punchMultiplier + ' = ' + n(durRaw, 1) + ' кг' + (durRaw < dur.minimum ? ' → минимум ' + dur.minimum + ' кг' : '') + (durChain.steps.some(function (s) { return s.factor !== 1; }) ? '; множитель: ' + durChain.formula + ' кг' : '') };
+    d.durability = { value: durChain.value, base: durBase, min: durMin, chain: durChain,
+      formula: n(S('punch'), 1) + (durPM !== 1 ? ' × ' + durPM + ' (' + gift.label.toLowerCase() + ')' : '') + ' × ' + dur.punchMultiplier + ' = ' + n(durRaw, 1) + ' кг' + (durRaw < durMin ? ' → минимум ' + durMin + ' кг' + (GE.durabilityMin ? ' (' + gift.label.toLowerCase() + ')' : '') : '') + (durChain.steps.some(function (s) { return s.factor !== 1; }) ? '; множитель: ' + durChain.formula + ' кг' : '') };
     mods.durability = { key: 'durability', label: rules.modifiers.durability.label, unit: 'кг', base: durBase, scopes: { all: durChain }, value: durChain.value };
     d.mods = mods;
     d.powerFactors = pf;
@@ -266,8 +279,9 @@
     /* подъём */
     var L = rules.lift, lift = S('lift');
     var explosive = lift * L.explosiveMultiplier;
-    var expT = Math.min(S('reaction') * L.explosiveTimeReactionFactor, L.explosiveTimeMaxMs);
-    d.explosive = { value: explosive, timeMs: expT, formula: n(lift, 1) + ' × ' + L.explosiveMultiplier + ' = ' + n(explosive, 1) + ' кг', timeFormula: 'min(' + n(S('reaction'), 1) + ' × ' + L.explosiveTimeReactionFactor + ', ' + L.explosiveTimeMaxMs + ') = ' + n(expT, 1) + ' мс' };
+    var expF = GE.explosiveTimeReactionFactor || L.explosiveTimeReactionFactor;
+    var expT = Math.min(S('reaction') * expF, L.explosiveTimeMaxMs);
+    d.explosive = { value: explosive, timeMs: expT, formula: n(lift, 1) + ' × ' + L.explosiveMultiplier + ' = ' + n(explosive, 1) + ' кг', timeFormula: 'min(' + n(S('reaction'), 1) + ' × ' + n(expF, 3) + ', ' + L.explosiveTimeMaxMs + ') = ' + n(expT, 1) + ' мс' };
     d.liftLegs = { value: lift * L.legsMultiplier, formula: n(lift, 1) + ' × ' + L.legsMultiplier + ' = ' + n(lift * L.legsMultiplier, 1) + ' кг (ногами)' };
     d.liftOneLimb = { value: lift / L.missingLimbDivisor, formula: n(lift, 1) + ' ÷ ' + L.missingLimbDivisor + ' = ' + n(lift / L.missingLimbDivisor, 1) + ' кг (без одной конечности)' };
     d.pressure = pressure(lift, L.palmAreaCm2, rules);
@@ -278,8 +292,8 @@
     d.speed = { kmh: speed, ms: kmhToMs(speed), formula: n(speed, 1) + ' км/ч ÷ 3.6 = ' + n(kmhToMs(speed), 2) + ' м/с' };
     d.accel = { start: accel, effectiveStart: Math.min(accel, speed), instantMax: accel >= speed, distanceM: SP.accelDistanceM,
       formula: n(lift, 1) + ' ÷ ' + SP.accelStartDivisor + ' = ' + n(accel, 1) + ' км/ч' + (accel >= speed ? ' ≥ максимума ' + n(speed, 1) + ' → сразу максимум' : '') + '; на максимум минимум ' + SP.accelDistanceM + ' м' };
-    var atk = speed * SP.attackMultiplier;
-    d.attackSpeed = { kmh: atk, ms: kmhToMs(atk), formula: n(speed, 1) + ' × ' + SP.attackMultiplier + ' = ' + n(atk, 1) + ' км/ч (' + n(kmhToMs(atk), 2) + ' м/с)' };
+    var atkM = GE.attackMultiplier || SP.attackMultiplier, atk = speed * atkM;
+    d.attackSpeed = { kmh: atk, multiplier: atkM, ms: kmhToMs(atk), formula: n(speed, 1) + ' × ' + atkM + (GE.attackMultiplier ? ' (' + gift.label.toLowerCase() + ')' : '') + ' = ' + n(atk, 1) + ' км/ч (' + n(kmhToMs(atk), 2) + ' м/с)' };
     d.water = waterRun(num(ch.weightKg, 0), kmhToMs(speed), rules);
 
     /* реакция */
@@ -309,6 +323,7 @@
     /* способности атрибута: статы считаются от текущих статов персонажа */
     d.abilities = abilityStats(ch.abilities, { punch: S('punch'), speed: S('speed'), durability: d.durability.value, lift: S('lift'), reaction: S('reaction') }, mods.attrPower, ch.ap, rules);
 
+    d.gift = { key: ch.gift || '', label: gift.label, short: gift.short, desc: gift.desc, pros: gift.pros || [], cons: gift.cons || [] };
     return { mode: mode, modeLabel: rules.modes[mode].label, stats: stats, derived: d };
   }
 

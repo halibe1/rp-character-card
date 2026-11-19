@@ -284,8 +284,8 @@
     var d = R.derived, mt = d.meleeTiming, sm = d.stamina;
     // главное: прочность крупно, рядом два боевых показателя
     var main = [
-      dcell('Прочность', fmt(d.durability.value, 0), 'кг', 'сила удара × 3', 'Прочность', d.durability.formula, 'Минимум без индивидуального дебаффа: ' + RULES.durability.minimum + ' кг (до множителя прочности).' + chainHtml(d.durability.chain, 'кг', 0), 'hero'),
-      dcell('Скорость атаки', fmt(d.attackSpeed.kmh), 'км/ч', fmt(d.attackSpeed.ms, 2) + ' м/с', 'Скорость атаки', d.attackSpeed.formula, 'Скорость × 1.5', 'key'),
+      dcell('Прочность', fmt(d.durability.value, 0), 'кг', 'сила удара × 3', 'Прочность', d.durability.formula, 'Минимум без индивидуального дебаффа: ' + d.durability.min + ' кг (до множителя прочности).' + chainHtml(d.durability.chain, 'кг', 0), 'hero'),
+      dcell('Скорость атаки', fmt(d.attackSpeed.kmh), 'км/ч', fmt(d.attackSpeed.ms, 2) + ' м/с', 'Скорость атаки', d.attackSpeed.formula, 'Скорость × ' + d.attackSpeed.multiplier + (d.attackSpeed.multiplier !== RULES.speed.attackMultiplier ? ' (одарённость)' : ''), 'key'),
       dcell('Взрывная сила', fmt(d.explosive.value, 0), 'кг', 'за ' + fmt(d.explosive.timeMs) + ' мс', 'Взрывная сила', d.explosive.formula + '; ' + d.explosive.timeFormula, 'Подъём × 2. Достигается за ½ реакции, но не дольше 100 мс.', 'key')
     ];
     var more = [
@@ -321,6 +321,8 @@
         '<br>' + esc(ap.label) + ': <b>' + fmt(ap.value, 1) + '%</b> (' + powerAspects(ap) + ')' + powerTipHtml(ap)) + '>' +
         (st ? '<span class="chip-ico">' + ICON[s.strikeType] + '</span>' : '') + '<b>' + esc(s.name) + '</b><span class="ct">' + esc(mp.level.label) + '</span></span>';
     }).join('') : '<span class="empty-note">Стилей нет — добавь в форме персонажа.</span>';
+    var gf = R.derived.gift;
+    $('#giftChips').innerHTML = gf.key ? '<span class="chip gift"' + tipAttr(gf.label, null, esc(gf.desc) + '<br>' + gf.pros.map(function (s) { return '+ ' + esc(s); }).join('<br>') + (gf.cons.length ? '<br>' + gf.cons.map(function (s) { return '− ' + esc(s); }).join('<br>') : '')) + '><b>' + esc(gf.short) + '</b><span class="ct">одарённость</span></span>' : '<span class="empty-note">Не выбрана — выбери в форме персонажа.</span>';
     var traits = (ch.traits || []).filter(function (t) { return t.name; });
     $('#traitChips').innerHTML = traits.length ? traits.map(function (t) {
       return '<span class="chip"' + tipAttr(t.name, null, t.description ? esc(t.description) : '<span style="color:var(--text-3)">Описание не указано</span>') + '>' + esc(t.name) + '</span>';
@@ -595,10 +597,17 @@
   /* ================= форма персонажа ================= */
 
   var draft = null, editingNew = false;
-  var STAT_OPTS = [['punch', 'Сила удара'], ['lift', 'Подъём'], ['speed', 'Скорость'], ['reaction', 'Реакция'], ['stamina', 'Стамина'], ['all', 'Все физические'], ['attrPower', 'Сила атрибута'], ['artPower', 'Сила боевого искусства'], ['durability', 'Прочность (множитель)']];
+  var STAT_OPTS = [['punch', 'Сила удара'], ['lift', 'Подъём'], ['speed', 'Скорость'], ['reaction', 'Реакция'], ['stamina', 'Стамина'], ['all', 'Все статы'], ['attrPower', 'Сила атрибута'], ['artPower', 'Сила боевого искусства'], ['durability', 'Прочность (множитель)']];
   var SRC_OPTS = [['', '— не важно'], ['attribute', 'Атрибут'], ['trait', 'Трейт'], ['style', 'Стиль'], ['artifact', 'Артефакт'], ['external', 'Внешний']];
   var TYPE_OPTS = [['buff', 'Баф (×)'], ['debuff', 'Дебафф (÷)']];
   var LAYER_OPTS = [['internal', 'Внутренний'], ['external', 'Внешний']];
+  var SECTORS = [
+    { key: 'attribute', label: 'Атрибут', hint: 'бафы от атрибута и его режимов' },
+    { key: 'trait', label: 'Трейты', hint: 'бонусы и дебаффы трейтов' },
+    { key: 'style', label: 'Стиль', hint: 'боевое искусство и его приёмы' },
+    { key: 'artifact', label: 'Артефакты', hint: 'свои артефакты · могут превысить предел' },
+    { key: 'external', label: 'Внешний', hint: 'саппорты, враги, аномалии · могут превысить предел' }
+  ];
   var SCOPE_OPTS = [['all', 'Все аспекты'], ['radius', 'Радиус'], ['power', 'Мощность'], ['speed', 'Скорость']];
 
   function opts(list, val) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (String(val || '') === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join(''); }
@@ -655,23 +664,63 @@ function allocEditor(a, base, i) {
   function renderEditor() {
     var d = draft, body = $('#editorBody'), keep = body.scrollTop;
     var strikeOpts = [['', '— не указан']].concat(Object.keys(RULES.strike.types).map(function (k) { return [k, RULES.strike.types[k].label + ' ×' + RULES.strike.types[k].multiplier]; }));
-    function buffRows(mode) {
-      var rows = d.buffs.map(function (b, i) { return { b: b, i: i }; }).filter(function (x) { return x.b.mode === mode; });
-      return (rows.length ? rows.map(function (x) {
-        return '<div class="row buff-row">' +
-          '<select data-f="buffs.' + x.i + '.stat" aria-label="Параметр">' + opts(STAT_OPTS, x.b.stat) + '</select>' +
-          '<div class="pct">' + inp('buffs.' + x.i + '.percent', x.b.percent, 'number', ' min="0" step="1" placeholder="40" aria-label="Процент"') + '<span>%</span></div>' +
-          '<select data-f="buffs.' + x.i + '.type" aria-label="Баф или дебафф">' + opts(TYPE_OPTS, x.b.type) + '</select>' +
-          '<select data-f="buffs.' + x.i + '.layer" aria-label="Слой">' + opts(LAYER_OPTS, x.b.layer) + '</select>' +
-          '<button type="button" class="x" data-del="buffs.' + x.i + '" aria-label="Удалить">✕</button>' +
-          '<select data-f="buffs.' + x.i + '.source" aria-label="Источник">' + opts(SRC_OPTS, x.b.source) + '</select>' +
-          '<select data-f="buffs.' + x.i + '.scope" aria-label="Аспект (для силы атрибута / боевого искусства)" title="Аспект: только для силы атрибута и боевого искусства">' + opts(SCOPE_OPTS, x.b.scope) + '</select>' +
-          inp('buffs.' + x.i + '.label', x.b.label, 'text', ' placeholder="подпись (необязательно)" aria-label="Подпись"') +
-          '<input type="checkbox" class="buff-on" data-f="buffs.' + x.i + '.enabled"' + (x.b.enabled === false ? '' : ' checked') + ' title="Бонус включён" aria-label="Включён"></div>';
-      }).join('') : '<div class="empty-note">Нет бафов.</div>') +
-        '<button type="button" class="mini-btn add" data-add-buff="' + mode + '">+ баф</button>';
+    /* бафы по секторам: одарённость → атрибут × трейты × стиль × артефакты × внешний */
+    function giftPicker() {
+      var G = RULES.gifts || {}, cur = d.gift || '', g = G[cur] || G[''];
+      var cards = Object.keys(G).filter(function (k) { return k; }).map(function (k) {
+        return '<label class="gift-opt' + (k === cur ? ' on' : '') + '"><input type="radio" name="gift" value="' + k + '" data-f="gift"' + (k === cur ? ' checked' : '') + '><b>' + esc(G[k].short) + '</b><small>' + esc(G[k].tag || '') + '</small></label>';
+      }).join('') + '<label class="gift-opt none' + (!cur ? ' on' : '') + '"><input type="radio" name="gift" value="" data-f="gift"' + (!cur ? ' checked' : '') + '><b>Нет</b><small>не выбрана</small></label>';
+      var info = cur ? '<div class="gift-info"><p>' + esc(g.desc) + '</p>' +
+        (g.pros || []).map(function (s) { return '<div class="ab-pc pro"><span class="ab-pc-i">+</span><div>' + esc(s) + '</div></div>'; }).join('') +
+        (g.cons || []).map(function (s) { return '<div class="ab-pc con"><span class="ab-pc-i">−</span><div>' + esc(s) + '</div></div>'; }).join('') + '</div>' : '';
+      return '<div class="gift-pick">' + cards + '</div>' + info;
     }
-    function abilityRows() {
+    function sectorOf(b) { return b.layer === 'external' ? 'external' : (SECTORS.some(function (s) { return s.key === b.source; }) ? b.source : 'other'); }
+    function sectorSummary(list) {
+      function line(mode) {
+        var by = {};
+        list.forEach(function (x) {
+          var b = x.b, p = parseFloat(b.percent); if (b.mode !== mode || b.enabled === false || !isFinite(p) || !p) return;
+          by[b.stat] = (by[b.stat] || 0) + (b.type === 'debuff' ? -p : p);
+        });
+        var keys = Object.keys(by);
+        return keys.length ? keys.map(function (k) { var lbl = (STAT_OPTS.filter(function (o) { return o[0] === k; })[0] || [k, k])[1]; return esc(lbl) + ' <b>' + (by[k] > 0 ? '+' : '−') + fmt(Math.abs(by[k]), 1) + '%</b>'; }).join(', ') : '';
+      }
+      var ps = line('passive'), as = line('active');
+      if (!ps && !as) return '';
+      return '<div class="bsec-sum">' + (ps ? '<span><i>всегда</i> ' + ps + '</span>' : '') + (as ? '<span><i>в бою +</i> ' + as + '</span>' : '') + '</div>';
+    }
+    function groupHtml(gid, rows) {
+      var g0 = rows[0].b, mode = g0.mode === 'active' ? 'active' : 'passive';
+      return '<div class="bgrp" data-group="' + esc(gid) + '">' +
+        '<div class="bgrp-h"><input type="text" data-gname="' + esc(gid) + '" value="' + esc(g0.label || '') + '" placeholder="Название, например: Режим зверя" aria-label="Название эффекта">' +
+        '<div class="seg" role="group" aria-label="Когда действует"><button type="button" data-gmode="' + esc(gid) + '" data-v="passive"' + (mode === 'passive' ? ' class="on"' : '') + ' title="Действует постоянно">Пассивный</button><button type="button" data-gmode="' + esc(gid) + '" data-v="active"' + (mode === 'active' ? ' class="on"' : '') + ' title="Включается в бою">Активный</button></div>' +
+        '<button type="button" class="x" data-del-group="' + esc(gid) + '" aria-label="Удалить эффект">✕</button></div>' +
+        rows.map(function (x) {
+          var scoped = RULES.modifiers[x.b.stat] && RULES.modifiers[x.b.stat].scoped;
+          return '<div class="brow">' +
+            '<select data-f="buffs.' + x.i + '.stat" aria-label="Что бафает">' + opts(STAT_OPTS, x.b.stat) + '</select>' +
+            '<div class="pct">' + inp('buffs.' + x.i + '.percent', x.b.percent, 'number', ' min="0" step="1" placeholder="50" aria-label="Процент"') + '<span>%</span></div>' +
+            '<select data-f="buffs.' + x.i + '.type" aria-label="Баф или дебафф">' + opts(TYPE_OPTS, x.b.type) + '</select>' +
+            (scoped ? '<select data-f="buffs.' + x.i + '.scope" aria-label="Аспект">' + opts(SCOPE_OPTS, x.b.scope) + '</select>' : '<span></span>') +
+            '<input type="checkbox" class="buff-on" data-f="buffs.' + x.i + '.enabled"' + (x.b.enabled === false ? '' : ' checked') + ' title="Бонус включён" aria-label="Включён">' +
+            '<button type="button" class="x" data-del="buffs.' + x.i + '" aria-label="Удалить строку">✕</button></div>';
+        }).join('') +
+        '<button type="button" class="mini-btn add sm" data-add-row="' + esc(gid) + '">+ стат</button></div>';
+    }
+    function buffSectors() {
+      var all = d.buffs.map(function (b, i) { return { b: b, i: i }; });
+      var list = SECTORS.concat(all.some(function (x) { return sectorOf(x.b) === 'other'; }) ? [{ key: 'other', label: 'Прочее', hint: 'бонусы без источника из старых данных: каждый считается отдельным множителем' }] : []);
+      return '<div class="bsec gift"><div class="bsec-h"><span class="bsec-n">1</span><b>Одарённость</b><small>выбирается одна из пяти, сама не редактируется; меняет базу до всех бафов</small></div>' + giftPicker() + '</div>' +
+        list.map(function (s, si) {
+          var mine = all.filter(function (x) { return sectorOf(x.b) === s.key; }), groups = [], byG = {};
+          mine.forEach(function (x) { var g = x.b.group || x.b.id || ('i' + x.i); if (!byG[g]) { byG[g] = []; groups.push(g); } byG[g].push(x); });
+          return '<div class="bsec"><div class="bsec-h"><span class="bsec-n">' + (si + 2) + '</span><b>' + esc(s.label) + '</b><small>' + esc(s.hint) + '</small></div>' +
+            sectorSummary(mine) +
+            (groups.length ? groups.map(function (g) { return groupHtml(g, byG[g]); }).join('') : '<div class="empty-note">Пусто.</div>') +
+            (s.key !== 'other' ? '<button type="button" class="mini-btn add" data-add-group="' + s.key + '">+ эффект</button>' : '') + '</div>';
+        }).join('');
+    }    function abilityRows() {
       var A = d.abilities, nA = A.length, ids = {};
       A.forEach(function (a) { ids[a.id] = true; });
       function one(i, depth) {
@@ -724,12 +773,12 @@ function allocEditor(a, base, i) {
       fld('Вес, кг', inp('weightKg', d.weightKg, 'number', ' min="0" step="1"'), 'для бега по воде') +
       '</div></section>' +
       // базовые
-      '<section class="ed-sec"><h3>Базовые характеристики</h3><div class="sub">С учётом одарённости, без бафов</div>' +
+      '<section class="ed-sec"><h3>Базовые характеристики</h3><div class="sub">Голые значения из анкеты: без одарённости и без бафов (одарённость выбирается в секторе 1 ниже)</div>' +
       '<div class="row2c">' +
       fld('Сила удара, кг', inp('stats.punch', d.stats.punch, 'number', ' min="0" step="10"')) +
       fld('Сила на подъём, кг', inp('stats.lift', d.stats.lift, 'number', ' min="0" step="5"')) +
       fld('Скорость, км/ч', inp('stats.speed', d.stats.speed, 'number', ' min="0" step="1"')) +
-      fld('Реакция, мс', inp('stats.reaction', d.stats.reaction, 'number', ' min="1" step="1"')) +
+      fld('Реакция, мс', inp('stats.reaction', d.stats.reaction, 'number', ' min="0" step="any"')) +
       fld('Стамина, %', inp('stats.stamina', d.stats.stamina, 'number', ' min="0" step="5"')) +
       fld('Физ. пробуждения', inp('awakenings', d.awakenings, 'number', ' min="0" step="1"'), '+1x к пределам за каждое') +
       '</div>' +
@@ -756,8 +805,7 @@ function allocEditor(a, base, i) {
       '<button type="button" class="mini-btn add" data-add="traits"' + (nTraits >= RULES.maxTraits ? ' disabled' : '') + '>' + (nTraits >= RULES.maxTraits ? 'максимум ' + RULES.maxTraits : '+ трейт') + '</button></section>' +
       '<section class="ed-sec ed-wide"><h3>Способности атрибута</h3><div class="sub">Описание пиши текстом, а число стата вставляй меткой: <code>{speed 910%}</code>, <code>{durability 280%}</code>, <code>{punch 910%}</code> (можно <code>x10.1</code>, по-русски <code>{скорость 910%}</code>). Бафф на все статы сразу (сила удара, подъём, скорость, реакция; прочность не входит): <code>{все 40%}</code>, за 100 AP он растёт на 7,5%. На экране метка превратится в <b>×10,1 (910%) → готовое значение</b>, посчитанное от текущих статов; сила атрибута усиливает процент. В подспособности метка — множитель от стата родителя: <code>{punch 0.5}</code> = половина. Остальные числа с единицами (<code>1 метр</code>, <code>15 м</code>, <code>20 кг</code>, <code>50 км/ч</code>) растут от силы атрибута сами; выдели число и нажми «🔒 не меняется» (оно обернётся в <code>{= 15 м}</code>), если оно не должно расти. «⚖ масштабировать» (<code>{~ 15 лучей}</code>) включает рост для числа без единицы. Не фиксированные траты снижаются каждые 100 AP (общих AP персонажа) на 5% от изначальных: изначально ≥10% — не ниже 5%, ≤5% — не ниже 0.5%.</div>' + abilityRows() + '</section>' +
       // бафы
-      '<section class="ed-sec ed-wide"><h3>Пассивные бафы</h3><div class="sub">Действуют постоянно. Слой: <b>внутренний</b> — от самого персонажа, <b>внешний</b> — от других (саппорты, враги, аномалии). Дебафф делит. Источник нужен только для предела (артефакт и внешний слой могут его превысить). Аспект — для силы атрибута и боевого искусства. Галочка справа — бонус включён.</div>' + buffRows('passive') + '</section>' +
-      '<section class="ed-sec ed-wide"><h3>Активные бафы</h3><div class="sub">Включаются в бою. Те же поля; процент всегда положительный, направление задаёт «баф / дебафф».</div>' + buffRows('active') + '</section>' +
+      '<section class="ed-sec ed-wide"><h3>Бафы и дебафы</h3><div class="sub">Идут по секторам. Внутри сектора проценты <b>складываются</b> (Режим зверя +50% и Дух зверя +50% = +100%, ×2), сектора <b>перемножаются</b>: <b>Атрибут × Трейты × Стиль × Артефакты × Внешний</b>. Дебафф делит. В каждом секторе добавь эффект, назови его и укажи, что он бафает; «Пассивный» действует всегда, «Активный» — только в режиме «Активные». Артефакты и внешний сектор могут вывести тело за предел.</div>' + buffSectors() + '</section>' +
       '</div>';
     body.scrollTop = keep;
   }
@@ -843,7 +891,7 @@ function allocEditor(a, base, i) {
       '<ol class="wel-steps">' +
       '<li><b>Нажми «✎ Редактировать».</b> Впиши имя. В «Базовых характеристиках» укажи голые значения из анкеты, без бонусов: сила удара, сила на подъём, скорость, реакция, стамина.</li>' +
       '<li><b>Атрибут и способности.</b> Название и описание атрибута пиши как в анкете. Число стата в способности вставляй меткой: <code>{speed 910%}</code>, <code>{punch 280%}</code>, <code>{durability 150%}</code>. Сайт сам посчитает значение от статов. Траты стамины указываются у каждой способности.</li>' +
-      '<li><b>Бафы.</b> «Пассивные» действуют всегда, «Активные» включаются в бою. Укажи параметр, процент, баф или дебафф и источник. Переключатель «Базовые / Пассивные / Активные» на главном экране пересчитывает статы.</li>' +
+      '<li><b>Одарённость и бафы.</b> В форме выбери одарённость (одна из пяти), затем заполни сектора: Атрибут, Трейты, Стиль, Артефакты, Внешний. В секторе добавь эффект (например «Режим зверя»), укажи, что он бафает, и пассивный он или активный. Внутри сектора проценты складываются, сектора перемножаются. Переключатель «Базовые / Пассивные / Активные» на главном экране пересчитывает статы.</li>' +
       '<li><b>Арт, трейты, стили боя.</b> Арт можно загрузить в редакторе, трейты и стили добавляются кнопками «+».</li>' +
       '<li><b>Сохрани данные у себя.</b> Персонажи хранятся только в этом браузере. Нажимай «⬇ Скачать данные», а «⬆ Загрузить» вернёт их на любом устройстве.</li>' +
       '</ol>' +
@@ -936,6 +984,8 @@ function allocEditor(a, base, i) {
   function bindEditor() {
     var body = $('#editorBody');
     body.addEventListener('input', function (e) {
+      var gn = e.target.getAttribute('data-gname');
+      if (gn !== null) { draft.buffs.forEach(function (b) { if ((b.group || b.id) === gn) { b.group = gn; b.label = e.target.value; } }); return; }
       var p = e.target.getAttribute('data-f');
       if (!p) return;
       setPath(draft, p, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
@@ -954,6 +1004,7 @@ function allocEditor(a, base, i) {
     }, true);
     body.addEventListener('change', function (e) {
       if (/^abilities\.\d+\.(description|pros\.\d+|cons\.\d+)$/.test(e.target.getAttribute('data-f') || '')) { renderEditor(); return; }
+      if (/^(gift|buffs\.\d+\.(stat|type|percent|enabled))$/.test(e.target.getAttribute('data-f') || '')) { renderEditor(); return; }
       if (e.target.id === 'abImgFile' && e.target.files[0] && abImgTarget !== null) {
         var ti = abImgTarget, f = e.target.files[0]; e.target.value = '';
         readAbilityImage(f).then(function (url) { var A = draft.abilities[ti]; if (A) { A.images = (A.images || []).concat(url).slice(0, RULES.abilities.maxImages || 6); renderEditor(); } }).catch(function (er) { toast(er.message); });
@@ -1007,8 +1058,14 @@ function allocEditor(a, base, i) {
         if (rows.length) rows[rows.length - (k === 'styles' ? 1 : 2)].focus();
         return;
       }
-      var ab = t.closest('[data-add-buff]');
-      if (ab) { draft.buffs.push({ id: makeBuffId(), mode: ab.getAttribute('data-add-buff'), stat: 'punch', percent: '', type: 'buff', layer: 'internal', scope: 'all', source: '', label: '', enabled: true }); renderEditor(); return; }
+      var ag = t.closest('[data-add-group]');
+      if (ag) { var sk = ag.getAttribute('data-add-group'), gid = makeBuffId(); draft.buffs.push({ id: makeBuffId(), group: gid, mode: 'passive', stat: 'all', percent: '', type: 'buff', layer: sk === 'external' ? 'external' : 'internal', scope: 'all', source: sk, label: '', enabled: true }); renderEditor(); var gi = $('#editorBody [data-gname="' + gid + '"]'); if (gi) gi.focus(); return; }
+      var ar = t.closest('[data-add-row]');
+      if (ar) { var rg = ar.getAttribute('data-add-row'), src = draft.buffs.filter(function (b) { return (b.group || b.id) === rg; })[0]; if (src) { if (!src.group) src.group = rg; draft.buffs.push({ id: makeBuffId(), group: rg, mode: src.mode, stat: 'punch', percent: '', type: 'buff', layer: src.layer, scope: 'all', source: src.source, label: src.label, enabled: true }); renderEditor(); } return; }
+      var gm = t.closest('[data-gmode]');
+      if (gm) { var mg = gm.getAttribute('data-gmode'); draft.buffs.forEach(function (b) { if ((b.group || b.id) === mg) b.mode = gm.getAttribute('data-v'); }); renderEditor(); return; }
+      var dg = t.closest('[data-del-group]');
+      if (dg) { var xg = dg.getAttribute('data-del-group'); draft.buffs = draft.buffs.filter(function (b) { return (b.group || b.id) !== xg; }); renderEditor(); return; }
       var del = t.closest('[data-del]');
       if (del) {
         var pp = del.getAttribute('data-del').split('.'), gone = draft[pp[0]].splice(+pp[1], 1)[0];

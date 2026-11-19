@@ -9,7 +9,7 @@
 
   function blankCharacter() {
     return {
-      id: '', name: '',
+      id: '', name: '', gift: '',
       attribute: { name: '', description: '', entryCost: null, upkeepCost: null, upkeepIntervalMin: null },
       art: null,
       stats: { punch: 1000, lift: 200, speed: 10, reaction: 250, stamina: 100 },
@@ -26,6 +26,7 @@
     ['styles', 'traits', 'buffs'].forEach(function (k) { if (!Array.isArray(c[k])) c[k] = []; });
     c.traits = c.traits.slice(0, RULES.maxTraits);
     c.buffs = c.buffs.map(upgradeBuff);
+    if (typeof c.gift !== 'string' || !(RULES.gifts || {})[c.gift]) c.gift = '';
     c.abilities = (Array.isArray(c.abilities) ? c.abilities : []).filter(function (a) { return a && typeof a === 'object'; }).slice(0, RULES.abilities.max).map(normAbility);
     // арт — только картинка из браузера или https-ссылка (данные других игроков не доверенные)
     if (typeof c.art !== 'string' || !/^(data:image\/|https:\/\/)/.test(c.art)) c.art = null;
@@ -68,6 +69,7 @@
     function n(v) { v = parseFloat(v); return isFinite(v) ? v : null; }
     var c = clone(d);
     c.name = String(c.name || '').trim();
+    if (!(RULES.gifts || {})[c.gift]) c.gift = '';
     c.attribute.name = String(c.attribute.name || '').trim();
     c.attribute.entryCost = n(c.attribute.entryCost);
     c.attribute.upkeepCost = n(c.attribute.upkeepCost);
@@ -87,7 +89,7 @@
     c.buffs = c.buffs.filter(function (b) { return n(b.percent); }).map(function (b) {
       var u = upgradeBuff(Object.assign({}, b, { percent: n(b.percent) }));
       var scoped = RULES.modifiers[u.stat] && RULES.modifiers[u.stat].scoped;
-      return { id: u.id || makeBuffId(), mode: u.mode, stat: u.stat, percent: u.percent, type: u.type, layer: u.layer, scope: scoped ? u.scope : 'all', source: u.source || '', label: String(u.label || '').trim(), enabled: u.enabled };
+      return { id: u.id || makeBuffId(), group: String(u.group || ''), mode: u.mode, stat: u.stat, percent: u.percent, type: u.type, layer: u.layer, scope: scoped ? u.scope : 'all', source: u.source || '', label: String(u.label || '').trim(), enabled: u.enabled };
     });
     return c;
   }

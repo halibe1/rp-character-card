@@ -489,5 +489,41 @@ test('если в подспособности больше, чем остало
   c.abilities = [{ id: 'p', name: 'P', description: '{реакция 100%}', ap: 1000, alloc: { reaction: 900 } }, { id: 'k', parentId: 'p', name: 'K', description: '', ap: 300 }];
   near(run(c, 'base').derived.abilities.find(a => a.id === 'p').allocFree, -200, 1e-9);
 });
+section('Одарённость');
+const gifted = g => { const c = clone(KENOS); c.gift = g; return run(c, 'base'); };
+test('без одарённости эталон Кеноса не меняется', () => { const r = gifted(''); near(r.stats.punch.value, 1000); near(r.derived.durability.value, 3000); near(r.derived.attackSpeed.kmh, 15); });
+test('Силы: удар +150 кг, скорость атаки ×1.3, взрывная сила за реакцию × 1/1.5', () => {
+  const r = gifted('strength'); near(r.stats.punch.value, 1150); near(r.derived.attackSpeed.kmh, 13); near(r.derived.explosive.timeMs, Math.min(230 * 0.6667, 100), 0.1);
+});
+test('Чувств: базовая реакция ÷1.5 (230 → 153.3)', () => { near(gifted('senses').stats.reaction.base, 230 / 1.5, 0.01); });
+test('Стойкости: скорость ÷1.4, прочность от силы ×1.2 (1000×1.2×3 = 3600), минимум 2000', () => {
+  const r = gifted('endurance'); near(r.stats.speed.value, 10 / 1.4, 0.01); near(r.derived.durability.value, 3600);
+  const c = clone(KENOS); c.gift = 'endurance'; c.stats.punch = 500; near(run(c, 'base').derived.durability.value, 2000);
+});
+test('Стойкости: дебафф ранения меньше на 0.1 (÷1.2 → ÷1.1)', () => {
+  const c = clone(KENOS); c.gift = 'endurance';
+  near(run(c, 'base', { wounds: [{ degree: 'medium', stat: 'punch' }] }).stats.punch.value, 1000 / 1.1, 0.5);
+});
+test('Тактики: все базовые −20% (÷1.2), реакция ×1.2', () => {
+  const r = gifted('tactics'); near(r.stats.punch.value, 1000 / 1.2, 0.01); near(r.stats.reaction.value, 230 * 1.2, 0.01); near(r.stats.stamina.value, 100);
+});
+test('реакцию можно опустить до 0 без ошибок', () => {
+  const c = clone(KENOS); c.stats.reaction = 0; c.buffs = []; const r = run(c, 'base');
+  near(r.stats.reaction.value, 0); assert.ok(isFinite(r.derived.explosive.timeMs));
+});
+
+section('Сектора бафов');
+test('Атрибут: Режим зверя +50% все (пассив) + Рывок зверя +50% удар/подъём/реакция (актив) → 3 стата +100%, скорость +50%', () => {
+  const c = clone(KENOS); c.buffs = [
+    { id: 'a', group: 'g1', label: 'Режим зверя', source: 'attribute', mode: 'passive', stat: 'all', percent: 50 },
+    { id: 'b', group: 'g2', label: 'Рывок зверя', source: 'attribute', mode: 'active', stat: 'punch', percent: 50 },
+    { id: 'c', group: 'g2', label: 'Рывок зверя', source: 'attribute', mode: 'active', stat: 'lift', percent: 50 },
+    { id: 'd', group: 'g2', label: 'Рывок зверя', source: 'attribute', mode: 'active', stat: 'reaction', percent: 50 }];
+  const r = run(c, 'active'); near(r.stats.punch.value, 2000); near(r.stats.lift.value, 400); near(r.stats.speed.value, 15); near(r.stats.reaction.value, 115);
+});
+test('сектора перемножаются: атрибут +100% × трейты +50% = ×3', () => {
+  const c = clone(KENOS); c.buffs = [{ id: 'a', source: 'attribute', mode: 'passive', stat: 'punch', percent: 100 }, { id: 'b', source: 'trait', mode: 'passive', stat: 'punch', percent: 50 }];
+  near(run(c, 'passive').stats.punch.value, 3000);
+});
 console.log('\n' + (failed ? '✗ ПРОВАЛЕНО: ' + failed + ', ' : '') + 'пройдено: ' + passed + ' из ' + (passed + failed));
 process.exit(failed ? 1 : 0);
