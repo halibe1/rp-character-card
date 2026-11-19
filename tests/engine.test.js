@@ -463,5 +463,16 @@ test('бафф на все статы тоже делится на 4; обычн
   const m = upg('{бафф на все статы 30%} и {бафф 30%}', { statusAll: 100, status: 100 }, 200);
   near(m.lines[0].percentNow, 35, 1e-9); near(m.lines[1].percentNow, 50, 1e-9); assert.deepStrictEqual(m.targets, ['status', 'statusAll']);
 });
+section('Уникальный счётчик');
+test('{счётчик 100%}: 100 AP дают +30% (100% → 130%, ×2.3), статы не участвуют', () => {
+  const m = upg('Вход в отражения меньше тела в {счётчик 100%} раза.', { unique: 100 }, 100);
+  const l = m.lines[0]; assert.strictEqual(l.effect, 'unique'); near(l.percentNow, 130, 1e-9); near(l.factorNow, 2.3, 1e-9);
+  assert.deepStrictEqual(m.targets, ['unique']);
+});
+test('счётчик не зависит от силы атрибута и статов; без вложенных AP остаётся 100%', () => {
+  const c = clone(KENOS); c.buffs = (c.buffs || []).concat([{ id: 'pw', source: 'attribute', mode: 'passive', stat: 'attrPower', percent: 200, scope: 'all', label: 'сила' }]);
+  c.abilities = [{ id: 'a', name: 'A', description: '{уник 100%}', ap: 0, alloc: {} }];
+  near(run(c, 'passive').derived.abilities[0].lines[0].percentNow, 100, 1e-9);
+});
 console.log('\n' + (failed ? '✗ ПРОВАЛЕНО: ' + failed + ', ' : '') + 'пройдено: ' + passed + ' из ' + (passed + failed));
 process.exit(failed ? 1 : 0);

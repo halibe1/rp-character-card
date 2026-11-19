@@ -165,7 +165,8 @@
     "upgrade": { "stepAp": 100, "physPercentPerStep": 30, "statusPercentPerStep": 20, "distancePercentPerStep": 15, "heatPerStep": 50, "coldPerStep": 20 },
     "effects": {
       "buff":   { "label": "Бафф союзника", "aliases": ["бафф", "баф", "buff", "союзник", "усиление"] },
-      "debuff": { "label": "Дебафф врага",  "aliases": ["дебафф", "дебаф", "debuff", "враг", "ослабление"] }
+      "debuff": { "label": "Дебафф врага",  "aliases": ["дебафф", "дебаф", "debuff", "враг", "ослабление"] },
+      "unique": { "label": "Уникальный счётчик", "pool": "unique", "aliases": ["уник", "уникальный", "счётчик", "счетчик", "особое", "unique", "counter"] }
     },
     "scaleUnits": [
       { "pattern": "км/ч|м/с", "scope": "speed" },

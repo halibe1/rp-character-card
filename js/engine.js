@@ -354,7 +354,7 @@
         last = re.lastIndex;
         continue;
       }
-      segs.push({ token: { key: effKind ? 'status' : key, effect: effKind || '', effAll: effAll, num: parseFloat(m[3].replace(',', '.')), mark: m[2] ? 'x' : (m[4] ? '%' : ''), src: m[0] } });
+      segs.push({ token: { key: effKind ? ((effects[effKind] && effects[effKind].pool) || 'status') : key, effect: effKind || '', effAll: effAll, num: parseFloat(m[3].replace(',', '.')), mark: m[2] ? 'x' : (m[4] ? '%' : ''), src: m[0] } });
       last = re.lastIndex;
     }
     if (last < text.length) segs.push({ text: text.slice(last) });
@@ -377,11 +377,12 @@
    * Куда можно вложить AP в способности: показатели из меток ({speed …}, {punch …}), «радиус» — если в тексте есть
    * масштабируемые числа-расстояния, «other» — прочие масштабируемые числа (кг, км/ч, {~ …}). Числа с замочком {= …} не считаются.
    */
-  var ALLOC_ORDER = ['punch', 'lift', 'speed', 'reaction', 'durability', 'all', 'status', 'statusAll', 'radius', 'other', 'heat', 'cold'];
+  var ALLOC_ORDER = ['punch', 'lift', 'speed', 'reaction', 'durability', 'all', 'status', 'statusAll', 'unique', 'radius', 'other', 'heat', 'cold'];
   /** Что даёт вложение AP в показатель: число (процентные пункты, множитель или градусы). */
   function upgradeGain(key, ap, rules) {
     var u = rules.abilities.upgrade, s = (ap || 0) / u.stepAp;
     if (key === 'status') return s * u.statusPercentPerStep;
+    if (key === 'unique') return s * u.physPercentPerStep;
     if (key === 'statusAll') return s * u.statusPercentPerStep / ((rules.abilities.allStats || [1, 2, 3, 4]).length);
     if (key === 'all') return s * u.physPercentPerStep / ((rules.abilities.allStats || [1, 2, 3, 4]).length);
     if (key === 'heat') return s * u.heatPerStep;
@@ -488,9 +489,9 @@
         if (!s.token) return s;
         var tk = s.token;
         if (tk.effect) {
-          var ef = rules.abilities.effects[tk.effect], pe = tk.mark === 'x' ? (tk.num - 1) * 100 : tk.num, ep = tk.effAll ? 'statusAll' : 'status', bp = upgradeGain(ep, alloc[ep], rules), pn = pe + bp;
-          var el = { key: 'status', pool: ep, effAll: !!tk.effAll, kind: 'effect', effect: tk.effect, label: ef.label + (tk.effAll ? ' (все статы)' : ''), unit: '%', src: tk.src, percent: pe, bonusPp: bp, allocAp: alloc[ep], percentNow: pn, factorNow: 1 + pn / 100, factor: 1 + pe / 100, value: pn,
-            formula: n(pe, 1) + '%' + (bp ? ' + ' + n(bp, 2) + '% (прокачка: ' + n(alloc[ep], 0) + ' AP × ' + U.statusPercentPerStep + '%' + (tk.effAll ? ' ÷ ' + rules.abilities.allStats.length + ' (все статы)' : '') + ' / ' + U.stepAp + ' AP)' : '') + ' = ' + n(pn, 1) + '% (' + (tk.effect === 'debuff' ? '÷' : '×') + n(1 + pn / 100, 2) + ')' };
+          var ef = rules.abilities.effects[tk.effect], pe = tk.mark === 'x' ? (tk.num - 1) * 100 : tk.num, ep = tk.effAll ? 'statusAll' : (ef.pool || 'status'), bp = upgradeGain(ep, alloc[ep], rules), pn = pe + bp;
+          var el = { key: ep === 'unique' ? 'unique' : 'status', pool: ep, effAll: !!tk.effAll, kind: 'effect', effect: tk.effect, label: ef.label + (tk.effAll ? ' (все статы)' : ''), unit: '%', src: tk.src, percent: pe, bonusPp: bp, allocAp: alloc[ep], percentNow: pn, factorNow: 1 + pn / 100, factor: 1 + pe / 100, value: pn,
+            formula: n(pe, 1) + '%' + (bp ? ' + ' + n(bp, 2) + '% (прокачка: ' + n(alloc[ep], 0) + ' AP × ' + (ep === 'unique' ? U.physPercentPerStep : U.statusPercentPerStep) + '%' + (tk.effAll ? ' ÷ ' + rules.abilities.allStats.length + ' (все статы)' : '') + ' / ' + U.stepAp + ' AP)' : '') + ' = ' + n(pn, 1) + '% (' + (tk.effect === 'debuff' ? '÷' : '×') + n(1 + pn / 100, 2) + ')' };
           lines.push(el);
           return { line: el };
         }
