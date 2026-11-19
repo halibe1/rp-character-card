@@ -434,5 +434,16 @@ test('замочек {= 500 °C} оставляет температуру не�
 test('AP нельзя вложить в температуру, которой нет в тексте', () => {
   const m = upg('Просто текст', { heat: 100 }, 100); assert.strictEqual(m.alloc.heat, 0);
 });
+section('Метка «все статы»');
+test('{все 40%} раскрывается в баф на силу удара, скорость и прочность', () => {
+  const m = upg('Повышает {все 40%}.', {}, 0);
+  assert.deepStrictEqual(m.lines.map(l => l.key).sort(), ['durability', 'punch', 'speed']);
+  near(m.lines.find(l => l.key === 'punch').value, 1400, 1e-6); near(m.lines.find(l => l.key === 'speed').value, 14, 1e-6);
+  assert.deepStrictEqual(m.targets, ['punch', 'speed', 'durability']);
+});
+test('{all x2} и {все статы 100%} дают то же; прокачка делится по показателям отдельно', () => {
+  const m = upg('{все статы 100%}', { speed: 100 }, 100);
+  near(m.lines.find(l => l.key === 'speed').percentNow, 130, 1e-9); near(m.lines.find(l => l.key === 'punch').percentNow, 100, 1e-9);
+});
 console.log('\n' + (failed ? '✗ ПРОВАЛЕНО: ' + failed + ', ' : '') + 'пройдено: ' + passed + ' из ' + (passed + failed));
 process.exit(failed ? 1 : 0);

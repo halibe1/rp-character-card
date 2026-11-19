@@ -325,6 +325,8 @@
    *   100% при силе атрибута ×3 → 300% (×4). Бафф атрибута ×2 и способность ×2 = ×4; при силе ×3 оба ×4 → ×16.
    * В подспособности: значение = такой же стат родителя × k (сила атрибута уже учтена в родителе).
    */
+  /** Слова-метки «на все показатели»: {все 40%}, {all 40%}, {все статы 40%}. */
+  var ALL_WORDS = ['all', 'все', 'всё', 'все статы', 'статы', 'все показатели', 'физа'];
   function parseAbilityText(text, defs, effects) {
     var map = {}, eff = {};
     Object.keys(defs).forEach(function (k) { [k].concat(defs[k].aliases || []).forEach(function (al) { map[al.toLowerCase()] = k; }); });
@@ -333,8 +335,19 @@
     text = String(text || '');
     while ((m = re.exec(text)) !== null) {
       var nm0 = m[1].trim().toLowerCase(), key = map[nm0], effKind = key ? null : eff[nm0];
-      if (!key && !effKind) continue;
+      var isAll = !key && !effKind && ALL_WORDS.indexOf(nm0) !== -1;
+      if (!key && !effKind && !isAll) continue;
       if (m.index > last) segs.push({ text: text.slice(last, m.index) });
+      if (isAll) {
+        // «все статы»: метка раскрывается в бафф на каждый показатель (сила удара, скорость, прочность)
+        var mk = m[2] ? 'x' : (m[4] ? '%' : ''), nv = parseFloat(m[3].replace(',', '.'));
+        Object.keys(defs).forEach(function (k, ix) {
+          segs.push({ text: (ix ? ', ' : '') + String(defs[k].label || k).toLowerCase() + ' ' });
+          segs.push({ token: { key: k, effect: '', num: nv, mark: mk, src: m[0] } });
+        });
+        last = re.lastIndex;
+        continue;
+      }
       segs.push({ token: { key: effKind ? 'status' : key, effect: effKind || '', num: parseFloat(m[3].replace(',', '.')), mark: m[2] ? 'x' : (m[4] ? '%' : ''), src: m[0] } });
       last = re.lastIndex;
     }
