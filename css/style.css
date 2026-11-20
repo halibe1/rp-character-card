@@ -1037,3 +1037,11 @@ body.is-capturing { cursor: progress; }
 .ab-tag.persona { border-color: rgba(232, 121, 249, .55); background: rgba(232, 121, 249, .14); color: #fbe7ff; }
 .ab-pers-chk { margin-top: 6px; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .abx.is-persona::before { animation: none; } }
+
+/* ---------- облегчённый режим (слабые телефоны) ---------- */
+.lite *, .lite *::before, .lite *::after { animation: none !important; transition-duration: .01ms !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+.lite .panel { background: linear-gradient(160deg, rgba(36, 20, 71, .94), rgba(26, 16, 51, .9) 60%); box-shadow: none; }
+.lite .stage-beam, .lite .stage-haze { filter: none; opacity: .55; }
+.lite .modal-backdrop { background: rgba(5, 2, 12, .88); }
+.lite .abx.is-persona::before { animation: none; }
+#btnLite[aria-checked=true] b { color: var(--hot); }

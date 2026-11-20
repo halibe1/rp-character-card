@@ -590,7 +590,7 @@
   }
 
   function init(opts) {
-    if (root.THREE && webglOK()) {
+    if (!opts.lite && root.THREE && webglOK()) {
       try { return initThree(opts); } catch (e) { console.warn('Three.js сцена не запустилась, используем CSS-карточку', e); }
     }
     return initCSS(opts);

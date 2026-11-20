@@ -616,6 +616,13 @@
   }
   function fld(label, control, hint) { return '<label class="field">' + esc(label) + control + (hint ? '<span class="hint">' + hint + '</span>' : '') + '</label>'; }
 
+  /** Облегчённый режим: выбор пользователя; если не выбирал — включаем сами на устройствах с ≤ 2 ГБ памяти. */
+  function liteOn() {
+    var v = null; try { v = localStorage.getItem('rp-lite'); } catch (e) { /* ок */ }
+    if (v === '1') return true; if (v === '0') return false;
+    return !!(navigator.deviceMemory && navigator.deviceMemory <= 2);
+  }
+  if (liteOn()) document.documentElement.classList.add('lite');
   function openEditor(isNew) {
     editingNew = !!isNew;
     draft = isNew ? blankCharacter() : clone(ch);
@@ -626,11 +633,20 @@
     $('#btnDelete').title = noDel ? (Remote ? 'Этого персонажа нет на сервере' : 'Нельзя удалить последнего персонажа') : '';
     $('#btnExport').hidden = isNew;
     renderEditor();
+    draftSnap = JSON.stringify(draft);
     $('#editor').hidden = false;
     document.body.style.overflow = 'hidden';
     var first = $('#editorBody input'); if (first) first.focus();
   }
-  function closeEditor() { $('#editor').hidden = true; draft = null; document.body.style.overflow = ''; hideTip(); }
+  function closeEditor() { $('#editor').hidden = true; draft = null; draftSnap = null; document.body.style.overflow = ''; hideTip(); }
+  /** Есть ли в форме несохранённые правки (сравниваем с тем, что было при открытии). */
+  var draftSnap = null;
+  function editorDirty() { return !!draft && draftSnap !== null && JSON.stringify(draft) !== draftSnap; }
+  /** Закрыть форму по ✕, «Отмена», Esc или клику мимо — с вопросом, если есть несохранённые правки. */
+  function askCloseEditor() {
+    if (editorDirty() && !confirm('В форме есть несохранённые изменения. Закрыть без сохранения?')) return;
+    closeEditor();
+  }
 
   function pcEditor(a, base, i) {
   function col(kind, title, ph) {
@@ -1161,7 +1177,9 @@ function allocEditor(a, base, i) {
       if (e.dataTransfer.files[0]) takeArt(e.dataTransfer.files[0]);
     });
     $('#editorForm').addEventListener('submit', saveEditor);
-    $('#editor').addEventListener('click', function (e) { if (e.target.closest('[data-eclose]')) closeEditor(); });
+    $('#editor').addEventListener('click', function (e) { if (e.target.closest('[data-eclose]')) askCloseEditor(); });
+    // закрытие вкладки, перезагрузка, «Назад» со страницы: браузер сам спросит «Покинуть сайт?»
+    window.addEventListener('beforeunload', function (e) { if (!$('#editor').hidden && editorDirty()) { e.preventDefault(); e.returnValue = ''; return ''; } });
     $('#btnExport').addEventListener('click', exportCharacter);
     $('#btnBackup').addEventListener('click', exportAll);
     $('#btnHelp').addEventListener('click', showWelcome);
@@ -1238,6 +1256,15 @@ function allocEditor(a, base, i) {
         console.error(err);
         toast('Скриншот не получился: ' + err.message);
       }).then(function () { btn.disabled = false; btn.textContent = '📷 Скриншот'; });
+    });
+    // облегчённый режим: без 3D-сцены, размытия и анимаций
+    var lb = $('#btnLite');
+    function liteLabel() { lb.querySelector('small').textContent = liteOn() ? 'включён · нажми, чтобы вернуть 3D и эффекты' : 'для слабых телефонов: без 3D, размытия и анимаций'; lb.setAttribute('aria-checked', liteOn() ? 'true' : 'false'); }
+    liteLabel();
+    lb.addEventListener('click', function () {
+      try { localStorage.setItem('rp-lite', liteOn() ? '0' : '1'); } catch (e) { /* ок */ }
+      if (draft && editorDirty() && !confirm('Страница перезагрузится, несохранённые изменения в форме пропадут. Продолжить?')) return;
+      draftSnap = null; location.reload();
     });
     // меню «Данные»: новый персонаж, бэкап, загрузка, справка
     var mb = $('#btnMore'), mm = $('#moreMenu');
@@ -1326,7 +1353,7 @@ function allocEditor(a, base, i) {
     });
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
-      if (!$('#editor').hidden) closeEditor(); else if (!$('#modal').hidden) closeModal();
+      if (!$('#editor').hidden) askCloseEditor(); else if (!$('#modal').hidden) closeModal();
     });
     bindShot();
     $('#charSelect').addEventListener('change', function () { selectCharacter(this.value); });
@@ -1356,7 +1383,7 @@ function allocEditor(a, base, i) {
     buildWoundControls();
     bind();
     bindEditor();
-    figure = window.RPFigure ? window.RPFigure.init({ canvas: $('#figureCanvas'), fallback: $('#figureFallback'), stage: $('#stage') }) : null;
+    figure = window.RPFigure ? window.RPFigure.init({ canvas: $('#figureCanvas'), fallback: $('#figureFallback'), stage: $('#stage'), lite: liteOn() }) : null;
 
     var ready = Remote ? Remote.init().catch(function (e) { console.warn('Supabase: не удалось восстановить вход', e); }) : Promise.resolve();
     ready.then(function () {
