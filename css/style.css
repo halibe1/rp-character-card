@@ -1001,3 +1001,23 @@ body.is-capturing { cursor: progress; }
 .chip.gift { border-color: var(--a3); background: rgba(124, 58, 237, .28); }
 .brow .x, .bgrp-h .x { width: 30px; height: 30px; padding: 0; background: rgba(124, 58, 237, .18); border: 1px solid var(--line); border-radius: 8px; color: var(--a4); }
 .brow .x:hover, .bgrp-h .x:hover { border-color: var(--hot); color: var(--hot); }
+
+/* ---------- памятка «как писать способность» ---------- */
+.tag-guide { margin: 4px 0 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-1); font-size: var(--fs-sm); color: var(--text-2); line-height: 1.55; }
+.tag-guide > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; color: var(--a4); list-style: none; }
+.tag-guide > summary::-webkit-details-marker { display: none; }
+.tag-guide > summary::before { content: '▸'; display: inline-block; margin-right: 8px; color: var(--a3); transition: transform .2s; }
+.tag-guide[open] > summary::before { transform: rotate(90deg); }
+.tag-guide > p, .tag-guide > .tg { margin: 0 14px 10px; max-width: 90ch; }
+.tag-guide code { padding: 1px 6px; border-radius: 6px; background: rgba(124, 58, 237, .2); border: 1px solid var(--line); color: var(--a4); white-space: nowrap; font-size: 12.5px; }
+.tg { display: grid; grid-template-columns: max-content max-content 1fr; gap: 0; }
+.tg-h { grid-column: 1 / -1; margin-top: 10px; padding-bottom: 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--a3); border-bottom: 1px solid var(--line); }
+.tg-r { display: contents; }
+.tg-r > span { padding: 5px 14px 5px 0; border-bottom: 1px dashed rgba(168, 85, 247, .12); }
+.tg-r > span:first-child { color: var(--text); }
+.tg-n { color: var(--text-3); font-size: 12px; }
+@media (max-width: 640px) {
+  .tg { grid-template-columns: 1fr auto; }
+  .tg-r > span { border-bottom: 0; }
+  .tg-r > .tg-n { grid-column: 1 / -1; padding-top: 0; border-bottom: 1px dashed rgba(168, 85, 247, .12); }
+}
