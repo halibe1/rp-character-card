@@ -504,9 +504,9 @@
         if (!s.token) return s;
         var tk = s.token;
         if (tk.effect) {
-          var ef = rules.abilities.effects[tk.effect], pe = tk.mark === 'x' ? (tk.num - 1) * 100 : tk.num, ep = tk.effAll ? 'statusAll' : (ef.pool || 'status'), bp = upgradeGain(ep, alloc[ep], rules), pn = pe + bp;
-          var el = { key: ep === 'unique' ? 'unique' : 'status', pool: ep, effAll: !!tk.effAll, kind: 'effect', effect: tk.effect, label: ef.label + (tk.effAll ? ' (все статы)' : ''), unit: '%', src: tk.src, percent: pe, bonusPp: bp, allocAp: alloc[ep], percentNow: pn, factorNow: 1 + pn / 100, factor: 1 + pe / 100, value: pn,
-            formula: n(pe, 1) + '%' + (bp ? ' + ' + n(bp, 2) + '% (прокачка: ' + n(alloc[ep], 0) + ' AP × ' + (ep === 'unique' ? U.physPercentPerStep : U.statusPercentPerStep) + '%' + (tk.effAll ? ' ÷ ' + rules.abilities.allStats.length + ' (все статы)' : '') + ' / ' + U.stepAp + ' AP)' : '') + ' = ' + n(pn, 1) + '% (' + (tk.effect === 'debuff' ? '÷' : '×') + n(1 + pn / 100, 2) + ')' };
+          var ef = rules.abilities.effects[tk.effect], pe = tk.mark === 'x' ? (tk.num - 1) * 100 : tk.num, ep = tk.effAll ? 'statusAll' : (ef.pool || 'status'), bp = upgradeGain(ep, alloc[ep], rules), pu = pe + bp, uF = ep === 'unique' ? power.scopes.all.value / power.base : 1, pn = pu * uF;
+          var el = { key: ep === 'unique' ? 'unique' : 'status', pool: ep, effAll: !!tk.effAll, kind: 'effect', effect: tk.effect, label: ef.label + (tk.effAll ? ' (все статы)' : ''), unit: '%', src: tk.src, percent: pe, bonusPp: bp, allocAp: alloc[ep], percentUp: pu, factorUp: 1 + pu / 100, power: uF, percentNow: pn, factorNow: 1 + pn / 100, factor: 1 + pe / 100, value: pn,
+            formula: n(pe, 1) + '%' + (bp ? ' + ' + n(bp, 2) + '% (прокачка: ' + n(alloc[ep], 0) + ' AP × ' + (ep === 'unique' ? U.physPercentPerStep : U.statusPercentPerStep) + '%' + (tk.effAll ? ' ÷ ' + rules.abilities.allStats.length + ' (все статы)' : '') + ' / ' + U.stepAp + ' AP)' : '') + (uF !== 1 ? (bp ? ' = ' + n(pu, 1) + '%' : '') + ' × ' + n(uF, 3) + ' (сила атрибута)' : '') + ' = ' + n(pn, 1) + '% (' + (tk.effect === 'debuff' ? '÷' : '×') + n(1 + pn / 100, 2) + ')' };
           lines.push(el);
           return { line: el };
         }

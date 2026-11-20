@@ -22,7 +22,7 @@
         if (EXTRA[key]) eff = gainTxt(key, ap) + (key === 'unique' ? ' к значению счётчика' : key === 'status' || key === 'statusAll' ? ' к проценту бафа / дебафа' : key === 'all' ? ' к каждому из 4 показателей (удар, подъём, скорость, реакция)' : ' к максимуму');
         else if (key === 'radius' || key === 'other') eff = mulTxt(1) + ' → ' + mulTxt(1 + ap / U.stepAp * U.distancePercentPerStep / 100) + ' (+' + fmt(ap / U.stepAp * U.distancePercentPerStep, 1) + '% от начального)';
         else if (l && l.child) eff = mulTxt(l.k0) + ' → ' + mulTxt(l.k) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
-        else if (l) eff = mulTxt(l.factor, l.percent) + ' → ' + mulTxt(l.factorNow, l.percentNow) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
+        else if (l) eff = mulTxt(l.factor, l.percent) + ' → ' + mulTxt(l.factorUp || l.factorNow, l.percentUp !== undefined ? l.percentUp : l.percentNow) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
         else if (ap) eff = '+' + fmt(ap / U.stepAp * U.physPercentPerStep, 1) + '% (в описании нет метки)';
         return '<div class="upg-row' + (key === mark ? ' me' : '') + '"><span>' + kv[1] + '</span><b>' + fmt(ap, 0) + ' AP</b><span class="upg-eff">' + eff + '</span></div>';
       }).join('');
@@ -30,7 +30,7 @@
     }
     function effHtml(l, a) {
       var deb = l.effect === 'debuff', uq = l.effect === 'unique', up = l.bonusPp > 0, mark = deb ? '÷' : '×';
-      var extra = uq ? 'Уникальное значение способности: ' + fmt(l.percentNow, 1) + '% (×' + fmt(l.factorNow, 2) + '). От статов персонажа и силы атрибута не зависит, растёт только от прокачки.' + (up ? '<br>Изначально ' + fmt(l.percent, 1) + '%, с прокачкой (' + fmt(l.allocAp, 0) + ' AP): ' + fmt(l.percentNow, 1) + '%.' : '') + allocBlock(a, 'unique') : (deb ? 'Дебафф врага: его характеристика делится на ' : 'Бафф союзника: его характеристика умножается на ') + '<b>' + fmt(l.factorNow, 2) + '</b>. Сила атрибута и статы персонажа на этот процент не влияют.' + (up ? '<br>Изначально ' + fmt(l.percent, 1) + '%, с прокачкой (' + fmt(l.allocAp, 0) + ' AP): ' + fmt(l.percentNow, 1) + '%.' : '') + allocBlock(a, l.pool || 'status');
+      var extra = uq ? 'Уникальное значение способности: ' + fmt(l.percentNow, 1) + '% (×' + fmt(l.factorNow, 2) + '). От статов персонажа не зависит; растёт от прокачки и усиливается силой атрибута.' + (up ? '<br>Изначально ' + fmt(l.percent, 1) + '%, с прокачкой (' + fmt(l.allocAp, 0) + ' AP): ' + fmt(l.percentUp, 1) + '%.' : '') + (l.power !== 1 ? '<br>Сила атрибута ×' + fmt(l.power, 2) + ': ' + fmt(l.percentUp, 1) + '% → ' + fmt(l.percentNow, 1) + '%.' : '') + allocBlock(a, 'unique') : (deb ? 'Дебафф врага: его характеристика делится на ' : 'Бафф союзника: его характеристика умножается на ') + '<b>' + fmt(l.factorNow, 2) + '</b>. Сила атрибута и статы персонажа на этот процент не влияют.' + (up ? '<br>Изначально ' + fmt(l.percent, 1) + '%, с прокачкой (' + fmt(l.allocAp, 0) + ' AP): ' + fmt(l.percentNow, 1) + '%.' : '') + allocBlock(a, l.pool || 'status');
       return '<span class="ab-num ab-eff' + (deb ? ' deb' : '') + '"' + tipAttr(l.label, l.formula, extra) + '>' + fmt(l.percentNow, l.percentNow % 1 ? 1 : 0) + '%' + (up ? '<span class="ab-up" title="прокачано">▲</span>' : '') + '<span class="ab-mul">' + mark + fmt(l.factorNow, 2) + '</span></span>';
     }
     function numHtml(l, a) {
@@ -83,7 +83,7 @@
         if (EXTRA[key]) eff = gainTxt(key, a.alloc[key]);
         else if (key === 'radius' || key === 'other') eff = '×' + fmt(1 + a.alloc[key] / U.stepAp * U.distancePercentPerStep / 100, 2);
         else if (l && l.child) eff = '×' + fmt(l.k0, 2) + ' → ×' + fmt(l.k, 2);
-        else if (l) eff = '×' + fmt(l.factor, 2) + ' → ×' + fmt(l.factorNow, 2);
+        else if (l) eff = '×' + fmt(l.factor, 2) + ' → ×' + fmt(l.factorUp || l.factorNow, 2);
         else eff = '+' + fmt(a.alloc[key] / U.stepAp * U.physPercentPerStep, 1) + '%';
         return '<span class="upg-chip">' + kv[1] + ' <b>' + fmt(a.alloc[key], 0) + ' AP</b> <small>' + eff + '</small></span>';
       });

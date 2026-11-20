@@ -469,10 +469,17 @@ test('{счётчик 100%}: 100 AP дают +30% (100% → 130%, ×2.3), ста
   const l = m.lines[0]; assert.strictEqual(l.effect, 'unique'); near(l.percentNow, 130, 1e-9); near(l.factorNow, 2.3, 1e-9);
   assert.deepStrictEqual(m.targets, ['unique']);
 });
-test('счётчик не зависит от силы атрибута и статов; без вложенных AP остаётся 100%', () => {
+test('счётчик усиливается силой атрибута: +200% силы (×3) → 100% становится 300%', () => {
   const c = clone(KENOS); c.buffs = (c.buffs || []).concat([{ id: 'pw', source: 'attribute', mode: 'passive', stat: 'attrPower', percent: 200, scope: 'all', label: 'сила' }]);
   c.abilities = [{ id: 'a', name: 'A', description: '{уник 100%}', ap: 0, alloc: {} }];
-  near(run(c, 'passive').derived.abilities[0].lines[0].percentNow, 100, 1e-9);
+  const l = run(c, 'passive').derived.abilities[0].lines[0];
+  near(l.percentNow, 300, 1e-9); near(l.percentUp, 100, 1e-9);
+});
+test('дебафф силы атрибута ÷1,5: {счётчик 150%} показывает 100% (×2)', () => {
+  const c = clone(KENOS); c.buffs = (c.buffs || []).concat([{ id: 'pw', source: 'attribute', mode: 'passive', stat: 'attrPower', type: 'debuff', percent: 50, scope: 'all', label: 'слабость' }]);
+  c.abilities = [{ id: 'a', name: 'A', description: '{счётчик 150%}', ap: 0, alloc: {} }];
+  const l = run(c, 'passive').derived.abilities[0].lines[0];
+  near(l.percentNow, 100, 1e-9); near(l.factorNow, 2, 1e-9);
 });
 section('AP подспособностей берутся из пула родителя');
 test('родитель 1800 AP: 900 в реакцию + 900 в подспособность → свободно 0', () => {
