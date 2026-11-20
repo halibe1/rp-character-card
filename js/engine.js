@@ -392,12 +392,16 @@
    * Куда можно вложить AP в способности: показатели из меток ({speed …}, {punch …}), «радиус» — если в тексте есть
    * масштабируемые числа-расстояния, «other» — прочие масштабируемые числа (кг, км/ч, {~ …}). Числа с замочком {= …} не считаются.
    */
-  var ALLOC_ORDER = ['punch', 'lift', 'speed', 'reaction', 'durability', 'all', 'status', 'statusAll', 'unique', 'radius', 'other', 'heat', 'cold'];
+  /** Каждая метка {счётчик …} — свой пункт прокачки: первая unique, дальше unique2…unique8. */
+  var UNIQUE_KEYS = ['unique', 'unique2', 'unique3', 'unique4', 'unique5', 'unique6', 'unique7', 'unique8'];
+  function uniqueKey(i) { return UNIQUE_KEYS[Math.min(i, UNIQUE_KEYS.length - 1)]; }
+  function isUnique(k) { return /^unique\d*$/.test(k || ''); }
+  var ALLOC_ORDER = ['punch', 'lift', 'speed', 'reaction', 'durability', 'all', 'status', 'statusAll', 'unique', 'unique2', 'unique3', 'unique4', 'unique5', 'unique6', 'unique7', 'unique8', 'radius', 'other', 'heat', 'cold'];
   /** Что даёт вложение AP в показатель: число (процентные пункты, множитель или градусы). */
   function upgradeGain(key, ap, rules) {
     var u = rules.abilities.upgrade, s = (ap || 0) / u.stepAp;
     if (key === 'status') return s * u.statusPercentPerStep;
-    if (key === 'unique') return s * u.physPercentPerStep;
+    if (isUnique(key)) return s * u.physPercentPerStep;
     if (key === 'statusAll') return s * u.statusPercentPerStep / ((rules.abilities.allStats || [1, 2, 3, 4]).length);
     if (key === 'all') return s * u.physPercentPerStep / ((rules.abilities.allStats || [1, 2, 3, 4]).length);
     if (key === 'heat') return s * u.heatPerStep;
@@ -417,12 +421,28 @@
     var defs = rules.abilities.stats, keys = [], dummy = { base: 100, scopes: {} };
     Object.keys(rules.scopes).forEach(function (sc) { dummy.scopes[sc] = { value: 100 }; });
     function add(k) { if (keys.indexOf(k) === -1) keys.push(k); }
+    var ui = 0;
     parseAbilityText(text, defs, rules.abilities.effects, rules.abilities.allStats).forEach(function (s) {
-      if (s.token) { add(s.token.viaAll ? 'all' : s.token.effAll ? 'statusAll' : s.token.key); return; }
+      if (s.token) { add(s.token.viaAll ? 'all' : s.token.effAll ? 'statusAll' : s.token.key === 'unique' ? uniqueKey(ui++) : s.token.key); return; }
       expandPlain(s.text, dummy, rules, {}).forEach(function (x) { if (x.scaled) add(x.scaled.scope === 'radius' ? 'radius' : 'other'); if (x.temp) add(x.temp.key); });
     });
     var order = ALLOC_ORDER;
     return order.filter(function (k) { return keys.indexOf(k) !== -1; });
+  }
+  /** Подписи счётчиков для формы: «к силе удара» — текст сразу после метки (или перед ней). */
+  function counterLabels(a, rules) {
+    var texts = [a.description].concat(a.pros || [], a.cons || []).map(function (x) { return String(x == null ? '' : x); }), out = {}, ui = 0;
+    texts.forEach(function (t) {
+      var segs = parseAbilityText(t, rules.abilities.stats, rules.abilities.effects, rules.abilities.allStats);
+      segs.forEach(function (s, i) {
+        if (!s.token || s.token.key !== 'unique') return;
+        var after = segs[i + 1] && segs[i + 1].text ? segs[i + 1].text : '', before = segs[i - 1] && segs[i - 1].text ? segs[i - 1].text : '';
+        var lab = after.replace(/^[\s,.:;—-]+/, '').split(/[.\n;]/)[0].trim();
+        if (!lab) lab = before.split(/[.\n;]/).pop().trim();
+        out[uniqueKey(ui++)] = lab.length > 40 ? lab.slice(0, 39) + '…' : lab;
+      });
+    });
+    return out;
   }
   function scaledSeg(numStr, suffix, scope, power, rules, forced, alloc) {
     var num = parseFloat(String(numStr).replace(',', '.')), sc = power.scopes[scope] ? scope : 'all';
@@ -511,14 +531,15 @@
       var lines = [], U = rules.abilities.upgrade;
       var targets = abilityTargets(a, rules), alloc = {};
       ALLOC_ORDER.forEach(function (k) { var v = a.alloc ? parseFloat(a.alloc[k]) : 0; alloc[k] = targets.indexOf(k) !== -1 && isFinite(v) && v > 0 ? v : 0; });
-      var temps = [];
+      var temps = [], uix = 0;
       function segsFor(text) { var raw = parseAbilityText(text, defs, rules.abilities.effects, rules.abilities.allStats).map(function (s) {
         if (!s.token) return s;
         var tk = s.token;
         if (tk.effect) {
-          var ef = rules.abilities.effects[tk.effect], pe = tk.mark === 'x' ? (tk.num - 1) * 100 : tk.num, ep = tk.effAll ? 'statusAll' : (ef.pool || 'status'), bp = upgradeGain(ep, alloc[ep], rules), pu = pe + bp, uF = ep === 'unique' ? power.scopes.all.value / power.base : 1, pn = pu * uF;
-          var el = { key: ep === 'unique' ? 'unique' : 'status', pool: ep, effAll: !!tk.effAll, kind: 'effect', effect: tk.effect, label: ef.label + (tk.effAll ? ' (все статы)' : ''), unit: '%', src: tk.src, percent: pe, bonusPp: bp, allocAp: alloc[ep], percentUp: pu, factorUp: 1 + pu / 100, power: uF, percentNow: pn, factorNow: 1 + pn / 100, factor: 1 + pe / 100, value: pn,
-            formula: n(pe, 1) + '%' + (bp ? ' + ' + n(bp, 2) + '% (прокачка: ' + n(alloc[ep], 0) + ' AP × ' + (ep === 'unique' ? U.physPercentPerStep : U.statusPercentPerStep) + '%' + (tk.effAll ? ' ÷ ' + rules.abilities.allStats.length + ' (все статы)' : '') + ' / ' + U.stepAp + ' AP)' : '') + (uF !== 1 ? (bp ? ' = ' + n(pu, 1) + '%' : '') + ' × ' + n(uF, 3) + ' (сила атрибута)' : '') + ' = ' + n(pn, 1) + '% (' + (tk.effect === 'debuff' ? '÷' : '×') + n(1 + pn / 100, 2) + ')' };
+          var ef = rules.abilities.effects[tk.effect], pe = tk.mark === 'x' ? (tk.num - 1) * 100 : tk.num, ep = tk.effAll ? 'statusAll' : (ef.pool || 'status'); if (ep === 'unique') ep = uniqueKey(uix++);
+          var bp = upgradeGain(ep, alloc[ep], rules), pu = pe + bp, uF = isUnique(ep) ? power.scopes.all.value / power.base : 1, pn = pu * uF;
+          var el = { key: isUnique(ep) ? ep : 'status', pool: ep, effAll: !!tk.effAll, kind: 'effect', effect: tk.effect, label: ef.label + (tk.effAll ? ' (все статы)' : ''), unit: '%', src: tk.src, percent: pe, bonusPp: bp, allocAp: alloc[ep], percentUp: pu, factorUp: 1 + pu / 100, power: uF, percentNow: pn, factorNow: 1 + pn / 100, factor: 1 + pe / 100, value: pn,
+            formula: n(pe, 1) + '%' + (bp ? ' + ' + n(bp, 2) + '% (прокачка: ' + n(alloc[ep], 0) + ' AP × ' + (isUnique(ep) ? U.physPercentPerStep : U.statusPercentPerStep) + '%' + (tk.effAll ? ' ÷ ' + rules.abilities.allStats.length + ' (все статы)' : '') + ' / ' + U.stepAp + ' AP)' : '') + (uF !== 1 ? (bp ? ' = ' + n(pu, 1) + '%' : '') + ' × ' + n(uF, 3) + ' (сила атрибута)' : '') + ' = ' + n(pn, 1) + '% (' + (tk.effect === 'debuff' ? '÷' : '×') + n(1 + pn / 100, 2) + ')' };
           lines.push(el);
           return { line: el };
         }
@@ -556,6 +577,7 @@
         entry: num(a.entryCost, null), upkeep: num(a.upkeepCost, null), upkeepNote: a.upkeepNote || '', fixedCost: fixed, segments: segments, pros: prosSegs, cons: consSegs, lines: lines, temps: temps,
         images: (Array.isArray(a.images) ? a.images : []).filter(function (u) { return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u); }).slice(0, rules.abilities.maxImages || 6) };
       var total = 0; Object.keys(alloc).forEach(function (k) { total += alloc[k]; });
+      res.counterLabels = counterLabels(a, rules);
       res.alloc = alloc; res.targets = targets; res.allocTotal = total; res.allocFree = res.ap - total; res.upgradeSteps = Math.floor(res.ap / U.stepAp);
       res.entryEff = res.entry === null ? null : fixed ? res.entry : reduceCost(res.entry, ap, rules);
       res.upkeepEff = res.upkeep === null ? null : fixed ? res.upkeep : reduceCost(res.upkeep, ap, rules);
@@ -680,7 +702,7 @@
     pressure: pressure, waterRun: waterRun, reactionCheck: reactionCheck, structureCast: structureCast,
     attributeEndurance: attributeEndurance, staminaRecovery: staminaRecovery, woundsAgainst: woundsAgainst,
     erosion: erosion, martialProgress: martialProgress, apProgress: apProgress,
-    parseAbilityText: parseAbilityText, personaRules: personaRules, personaPool: personaPool, upgradeGain: upgradeGain, upgradeText: upgradeText, ALLOC_ORDER: ALLOC_ORDER, kmhToMs: kmhToMs, msToKmh: msToKmh, PHYS: PHYS, ALL: ALL
+    parseAbilityText: parseAbilityText, counterLabels: counterLabels, isUnique: isUnique, UNIQUE_KEYS: UNIQUE_KEYS, personaRules: personaRules, personaPool: personaPool, upgradeGain: upgradeGain, upgradeText: upgradeText, ALLOC_ORDER: ALLOC_ORDER, kmhToMs: kmhToMs, msToKmh: msToKmh, PHYS: PHYS, ALL: ALL
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RPEngine = api;

@@ -647,23 +647,45 @@ function abPool(a) {
   var pool = pers ? E.personaPool(draft ? draft.ap : 0, a.personaAp, RULES) : parseFloat(a.ap) || 0;
   return { persona: pers, rules: R, U: U, pool: pool, sub: Math.max(0, Math.floor(parseFloat(a.subCount) || 0)) * U.stepAp };
 }
+function allocLabel(a, k) {
+  var c = E.isUnique(k) && E.counterLabels(a, RULES)[k];
+  return ALLOC_LABEL[k] + (c ? ' «' + c + '»' : '');
+}
+/** Единица ввода у олицетворения: распределяют не AP, а сам прирост (% или °C). */
+function allocUnit(k) { return k === 'heat' ? '°C' : k === 'cold' ? '−°C' : '%'; }
 function allocHint(a) {
   var P = abPool(a), U = P.U, ap = P.pool, al = normAlloc(a.alloc), tg = E.abilityTargets(a, RULES), tot = 0, parts = [];
   var kids = P.sub;
   tg.forEach(function (k) { tot += al[k]; });
   tg.forEach(function (k) {
     if (!al[k]) return;
-    parts.push(ALLOC_LABEL[k].toLowerCase() + ' ' + E.upgradeText(k, al[k], P.rules));
+    parts.push(allocLabel(a, k).toLowerCase() + ' ' + E.upgradeText(k, al[k], P.rules));
   });
+  if (P.persona) {
+    var st = U.stepAp, steps = ap / st, used = (tot + kids) / st, left = steps - used, eps = 1e-6;
+    var eq = function (x) { return '+' + fmt(x * U.physPercentPerStep, 1) + '% к стату или счётчику, или +' + fmt(x * U.statusPercentPerStep, 1) + '% к баффу / дебаффу, или +' + fmt(x * U.heatPerStep, 0) + ' °C'; };
+    return 'Доступно <b>' + fmt(steps, 0) + ' усил.</b> (' + fmt(ap, 0) + ' AP, по ' + fmt(st, 0) + ' за усиление: +' + U.physPercentPerStep + '% к стату)' + (kids ? ', из них подспособности: ' + fmt(kids / st, 0) : '') + '. ' +
+      (Math.abs(left) < eps ? '<b>Всё распределено.</b>' : left > 0 ? 'Осталось <b>' + fmt(left, 2) + ' усил.</b> = ' + eq(left) + '.' : '<b class="bad">Перебор на ' + fmt(-left, 2) + ' усил.</b> (' + eq(-left).replace(/\+/g, '') + ' лишние).') +
+      (parts.length ? '<br>Сейчас: ' + parts.join(', ') : '');
+  }
   return 'Вложено ' + fmt(tot + kids, 0) + (kids ? ' (подспособности ' + fmt(kids, 0) + ')' : '') + ' из ' + fmt(ap, 0) + ' AP' + (tot + kids < ap ? ' · свободно ' + fmt(ap - tot - kids, 0) : '') + (tot + kids > ap ? ' · <b class="bad">' + (P.persona ? 'больше, чем набрано после получения' : 'больше, чем AP способности') + '</b>' : '') + (parts.length ? ' — ' + parts.join(', ') : '');
 }
 function allocEditor(a, base, i) {
   var P = abPool(a), U = P.U, tg = E.abilityTargets(a, RULES);
   if (!tg.length) return '<div class="ab-alloc"><div class="hint">Вкладывать AP пока некуда: в описании нет чисел, которые зависят от статов или меняются от силы атрибута. Добавь метку <code>{speed 910%}</code>, эффект на цель <code>{дебафф 40%}</code>, температуру (<code>500 °C</code>, <code>-100 °C</code>) или число с единицей (<code>10 м</code>, <code>20 кг</code>); числа с замочком <code>{= …}</code> не прокачиваются.</div></div>';
   var PHYS_K = ['punch', 'lift', 'speed', 'reaction', 'durability', 'all'];
-  var hasPhys = tg.some(function (k) { return PHYS_K.indexOf(k) !== -1; });
+  var hasPhys = tg.some(function (k) { return PHYS_K.indexOf(k) !== -1 || E.isUnique(k); });
+  var persHint = '<div class="hint">Распредели прирост сам: каждое усиление (' + U.stepAp + ' AP) = <b>+' + U.physPercentPerStep + '%</b> к стату или счётчику — можно делить, например 50% + 50% + 50%; или +' + U.statusPercentPerStep + '% к баффу / дебаффу; или +' + U.heatPerStep + ' °C / −' + U.coldPerStep + ' °C. Пиши прибавку в процентах (или градусах), не в AP.</div>';
+  if (P.persona) return '<div class="ab-alloc">' + persHint + '<div class="row4">' + tg.map(function (k) {
+      var g = E.upgradeGain(k, parseFloat(a.alloc[k]) || 0, P.rules), gv = g ? Math.round(g * 100) / 100 : '';
+      return fld(allocLabel(a, k) + ', ' + allocUnit(k), '<input type="number" data-alloc-u="' + i + '.' + k + '" value="' + gv + '" min="0" step="any" inputmode="decimal">');
+    }).join('') + '</div>' + (hasPhys ? '<div class="row"><button type="button" class="mini-btn" data-spread="' + i + '">⚖ остаток поровну</button></div>' : '') + '<div class="ab-alloc-hint">' + allocHint(a) + '</div></div>';
   return '<div class="ab-alloc"><div class="hint">AP можно вложить только в то, что есть в описании: показатели из меток и числа, которые меняются от силы атрибута. Каждые ' + U.stepAp + ' AP дают: +' + U.physPercentPerStep + '% к физическому показателю персонажа (баф 100% → ' + fmt(100 + U.physPercentPerStep, 0) + '%); +' + U.statusPercentPerStep + '% к бафу союзника или дебафу врага (<code>{бафф 40%}</code>, <code>{дебафф 40%}</code>); уникальный счётчик без статов (<code>{счётчик 100%}</code>): +' + U.physPercentPerStep + '%; если эффект на все статы цели (<code>{дебафф все 40%}</code>), то +' + fmt(U.statusPercentPerStep / RULES.abilities.allStats.length, 2) + '%; +' + U.heatPerStep + ' °C к максимальной температуре огня или −' + U.coldPerStep + ' °C для холода (<code>500 °C</code>, <code>-100 °C</code>); +' + U.distancePercentPerStep + '% к начальному числу (радиус, дальность). Можно делить: ' + fmt(U.stepAp / 4, 0) + ' AP на 4 показателя = +' + fmt(U.physPercentPerStep / 4, 1) + '% каждому.</div>' +
-    '<div class="row4">' + tg.map(function (k) { return fld(ALLOC_LABEL[k] + ', AP', inp(base + 'alloc.' + k, a.alloc[k] || '', 'number', ' min="0" step="' + (U.stepAp / 4) + '"')); }).join('') + '</div>' +
+    '<div class="row4">' + tg.map(function (k) {
+      if (!P.persona) return fld(allocLabel(a, k) + ', AP', inp(base + 'alloc.' + k, a.alloc[k] || '', 'number', ' min="0" step="' + (U.stepAp / 4) + '"'));
+      var g = E.upgradeGain(k, parseFloat(a.alloc[k]) || 0, P.rules), gv = g ? Math.round(g * 100) / 100 : '';
+      return fld(allocLabel(a, k) + ', ' + allocUnit(k), '<input type="number" data-alloc-u="' + i + '.' + k + '" value="' + gv + '" min="0" step="any" inputmode="decimal">');
+    }).join('') + '</div>' +
     (hasPhys ? '<div class="row"><button type="button" class="mini-btn" data-spread="' + i + '" title="Раскидать свободные AP поровну на показатели из описания">⚖ свободные AP поровну на показатели</button></div>' : '') +
     '<div class="ab-alloc-hint">' + allocHint(a) + '</div></div>';
 }
@@ -999,6 +1021,14 @@ function allocEditor(a, base, i) {
     body.addEventListener('input', function (e) {
       var gn = e.target.getAttribute('data-gname');
       if (gn !== null) { draft.buffs.forEach(function (b) { if ((b.group || b.id) === gn) { b.group = gn; b.label = e.target.value; } }); return; }
+      var au = e.target.getAttribute('data-alloc-u');
+      if (au) {
+        var ai = au.split('.'), AA = draft.abilities[+ai[0]], ak = ai[1]; if (!AA) return;
+        var PP = abPool(AA), per = E.upgradeGain(ak, PP.U.stepAp, PP.rules), v = parseFloat(String(e.target.value).replace(',', '.'));
+        AA.alloc = normAlloc(AA.alloc); AA.alloc[ak] = isFinite(v) && v > 0 && per ? Math.round(v / per * PP.U.stepAp * 1e6) / 1e6 : 0;
+        var hh = e.target.closest('.ab-alloc'), hn = hh && hh.querySelector('.ab-alloc-hint'); if (hn) hn.innerHTML = allocHint(AA);
+        return;
+      }
       var p = e.target.getAttribute('data-f');
       if (!p) return;
       setPath(draft, p, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
@@ -1040,7 +1070,7 @@ function allocEditor(a, base, i) {
         var used = 0; E.abilityTargets(SA, RULES).forEach(function (k) { used += SA.alloc[k]; });
         var SP = abPool(SA), free = SP.pool - SP.sub - used;
         if (free <= 0) { toast('Свободных AP нет'); return; }
-        var ph = E.abilityTargets(SA, RULES).filter(function (k) { return ['punch', 'lift', 'speed', 'reaction', 'durability', 'all'].indexOf(k) !== -1; });
+        var ph = E.abilityTargets(SA, RULES).filter(function (k) { return ['punch', 'lift', 'speed', 'reaction', 'durability', 'all'].indexOf(k) !== -1 || E.isUnique(k); });
         if (!ph.length) { toast('В описании нет показателей-меток'); return; }
         ph.forEach(function (k) { SA.alloc[k] = Math.round((SA.alloc[k] + free / ph.length) * 100) / 100; });
         renderEditor(); return;

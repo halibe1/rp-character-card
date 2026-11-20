@@ -47,8 +47,8 @@
       parentId: String(a.parentId || ''), fixedCost: a.fixedCost === true, persona: a.persona === true, personaAp: a.personaAp === undefined || a.personaAp === '' ? RULES.abilities.personaUnlockAp || 1000 : a.personaAp, subCount: a.subCount === undefined || a.subCount === '' ? 0 : a.subCount, alloc: normAlloc(a.alloc), pros: normList(a.pros), cons: normList(a.cons), ap: a.ap === undefined || a.ap === '' ? 0 : a.ap,
       entryCost: a.entryCost === undefined ? null : a.entryCost, upkeepCost: a.upkeepCost === undefined ? null : a.upkeepCost,
       images: (Array.isArray(a.images) ? a.images : []).filter(function (u) { return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u); }).slice(0, RULES.abilities.maxImages || 6) };
-  }  var ALLOC_KEYS = ['punch', 'lift', 'speed', 'reaction', 'durability', 'all', 'status', 'statusAll', 'unique', 'radius', 'other', 'heat', 'cold'];
-  var ALLOC_LABEL = { punch: 'Сила удара', speed: 'Скорость', durability: 'Прочность', radius: 'Радиус / дальность', other: 'Прочие числа', lift: 'Сила на подъём', reaction: 'Реакция', all: 'Все статы (удар, подъём, скорость, реакция)', statusAll: 'Эффект на все статы цели', unique: 'Уникальный счётчик', status: 'Эффект на цель (бафф / дебафф)', heat: 'Нагрев, °C', cold: 'Охлаждение, °C' };
+  }  var ALLOC_KEYS = E.ALLOC_ORDER.slice();
+  var ALLOC_LABEL = { punch: 'Сила удара', speed: 'Скорость', durability: 'Прочность', radius: 'Радиус / дальность', other: 'Прочие числа', lift: 'Сила на подъём', reaction: 'Реакция', all: 'Все статы (удар, подъём, скорость, реакция)', statusAll: 'Эффект на все статы цели', unique: 'Счётчик 1', unique2: 'Счётчик 2', unique3: 'Счётчик 3', unique4: 'Счётчик 4', unique5: 'Счётчик 5', unique6: 'Счётчик 6', unique7: 'Счётчик 7', unique8: 'Счётчик 8', status: 'Эффект на цель (бафф / дебафф)', heat: 'Нагрев, °C', cold: 'Охлаждение, °C' };
   /** Олицетворение у персонажа одно и только у основной способности. */
   function onePersona(list) {
     var seen = false;

@@ -512,6 +512,14 @@ test('за 1000 AP: стат +150%, бафф/дебафф +100%, нагрев +5
   near(o.temps.find(t => t.key === 'cold').value, -130, 1e-9);
   near(o.allocFree, -1000, 1e-9);
 });
+test('каждый {счётчик} — свой пункт: 4 метки, 1000 AP разложены 1/3 на три → +50% у трёх, четвёртый без изменений', () => {
+  const c = clone(KENOS); c.ap = 3000;
+  c.abilities = [{ id: 'o', name: 'O', persona: true, personaAp: 2000, description: '{счётчик 100%} к силе удара. {счётчик 100%} к подъёму. {счётчик 100%} к скорости. {счётчик 100%} к прочности.', alloc: { unique: 1000 / 3, unique2: 1000 / 3, unique3: 1000 / 3 } }];
+  const o = run(c, 'base').derived.abilities[0], v = o.lines.map(l => l.percentNow);
+  near(v[0], 150, 1e-6); near(v[1], 150, 1e-6); near(v[2], 150, 1e-6); near(v[3], 100, 1e-9);
+  assert.deepStrictEqual(o.targets, ['unique', 'unique2', 'unique3', 'unique4']); near(o.allocFree, 0, 1e-6);
+  assert.strictEqual(o.counterLabels.unique, 'к силе удара'); assert.strictEqual(o.counterLabels.unique4, 'к прочности');
+});
 test('подспособности олицетворения: счётчик 2 = −2000 AP', () => {
   const o = persona(5000, 2000, { subCount: 2 })[0]; near(o.childAp, 2000, 1e-9); near(o.allocFree, 1000, 1e-9);
 });
