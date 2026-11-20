@@ -864,7 +864,7 @@ function allocEditor(a, base, i) {
             console.warn('Арт ' + file.name + ': ' + im.naturalWidth + '×' + im.naturalHeight + ' px — меньше ' + ART_MIN_HEIGHT + ' px по высоте, на скриншоте будет мыльным.');
             toast('Арт ' + im.naturalWidth + '×' + im.naturalHeight + ' — для чёткого скриншота нужно от ' + ART_MIN_HEIGHT + ' px по высоте');
           }
-          res(fr.result);
+          if (fr.result.length > SHRINK_FROM * 2 && file.type !== 'image/gif') shrinkImage(fr.result, ART_SIDE, ART_Q).then(res); else res(fr.result);
         };
         im.onerror = function () { rej(new Error('Не удалось прочитать картинку')); };
         im.src = fr.result;
@@ -874,6 +874,43 @@ function allocEditor(a, base, i) {
     });
   }
   var abImgTarget = null;
+  /**
+   * Сжатие картинки: до maxSide px по большей стороне, в WebP (прозрачность сохраняется).
+   * Если браузер не умеет WebP — JPEG, а при прозрачности PNG. Возвращает исходник, если сжатие не уменьшило размер.
+   * GIF не трогаем (потеряется анимация).
+   */
+  function shrinkImage(url, maxSide, quality) {
+    return new Promise(function (res) {
+      if (typeof url !== 'string' || !/^data:image\/(png|jpeg|jpg|webp|bmp)/i.test(url)) return res(url);
+      var im = new Image();
+      im.onload = function () {
+        try {
+          var k = Math.min(1, maxSide / Math.max(im.naturalWidth, im.naturalHeight));
+          var cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(im.naturalWidth * k)); cv.height = Math.max(1, Math.round(im.naturalHeight * k));
+          var g = cv.getContext('2d'); g.drawImage(im, 0, 0, cv.width, cv.height);
+          var out = cv.toDataURL('image/webp', quality);
+          if (out.indexOf('data:image/webp') !== 0) {
+            var px = g.getImageData(0, 0, cv.width, cv.height).data, alpha = false;
+            for (var i = 3; i < px.length; i += 4) if (px[i] < 255) { alpha = true; break; }
+            out = alpha ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', quality);
+          }
+          res(out.length < url.length ? out : url);
+        } catch (e) { res(url); }
+      };
+      im.onerror = function () { res(url); };
+      im.src = url;
+    });
+  }
+  var IMG_SIDE = 1400, IMG_Q = 0.86, ART_SIDE = 2400, ART_Q = 0.92, SHRINK_FROM = 300 * 1024;
+  /** Перед сохранением: большие картинки (старые PNG и т. п.) пережимаются. */
+  function shrinkCharacterImages(c) {
+    var jobs = [];
+    if (c.art && c.art.length > SHRINK_FROM * 2) jobs.push(shrinkImage(c.art, ART_SIDE, ART_Q).then(function (u) { c.art = u; }));
+    (c.abilities || []).forEach(function (a) {
+      (a.images || []).forEach(function (u, k) { if (u.length > SHRINK_FROM) jobs.push(shrinkImage(u, IMG_SIDE, IMG_Q).then(function (v) { a.images[k] = v; })); });
+    });
+    return Promise.all(jobs).then(function () { return c; });
+  }
   /** Картинка способности: уменьшаем до 1400 px по большей стороне, чтобы не раздувать хранилище. */
   function readAbilityImage(file) {
     return new Promise(function (res, rej) {
@@ -882,11 +919,8 @@ function allocEditor(a, base, i) {
       fr.onload = function () {
         var im = new Image();
         im.onload = function () {
-          var k = Math.min(1, 1400 / Math.max(im.naturalWidth, im.naturalHeight));
-          if (k === 1 && file.size < 1.5 * 1024 * 1024) return res(fr.result);
-          var cv = document.createElement('canvas'); cv.width = Math.round(im.naturalWidth * k); cv.height = Math.round(im.naturalHeight * k);
-          cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
-          res(cv.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.9));
+          if (file.type === 'image/gif') return res(fr.result);
+          shrinkImage(fr.result, IMG_SIDE, IMG_Q).then(res);
         };
         im.onerror = function () { rej(new Error('Не удалось прочитать картинку')); };
         im.src = fr.result;
@@ -906,7 +940,7 @@ function allocEditor(a, base, i) {
     if (editingNew || !c.id) c.id = makeId(c.name);
     c.updatedAt = Date.now();
     if (!c.createdAt) c.createdAt = Date.now();
-    Store.put(c).then(function () {
+    shrinkCharacterImages(c).then(function () { return Store.put(c); }).then(function () {
       var i = chars.map(function (x) { return x.id; }).indexOf(c.id);
       if (i === -1) chars.push(c); else chars[i] = c;
       closeEditor();
