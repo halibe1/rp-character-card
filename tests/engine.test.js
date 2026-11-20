@@ -481,20 +481,42 @@ test('дебафф силы атрибута ÷1,5: {счётчик 150%} пок
   const l = run(c, 'passive').derived.abilities[0].lines[0];
   near(l.percentNow, 100, 1e-9); near(l.factorNow, 2, 1e-9);
 });
-section('AP подспособностей берутся из пула родителя');
-test('родитель 1800 AP: 900 в реакцию + 900 в подспособность → свободно 0', () => {
+section('Счётчик подспособностей от прокачки');
+test('счётчик 0: подспособности не отнимают AP родителя, их собственные AP не в счёт', () => {
   const c = clone(KENOS);
   c.abilities = [
     { id: 'p', name: 'P', description: '{реакция 100%}', ap: 1800, alloc: { reaction: 900 } },
     { id: 'k', parentId: 'p', name: 'K', description: '{реакция 0.5}', ap: 900, alloc: {} }
   ];
-  const r = run(c, 'base').derived.abilities, p = r.find(a => a.id === 'p'), k = r.find(a => a.id === 'k');
-  near(p.childAp, 900, 1e-9); near(p.allocFree, 0, 1e-9); near(k.allocFree, 900, 1e-9);
+  const p = run(c, 'base').derived.abilities.find(a => a.id === 'p');
+  near(p.childAp, 0, 1e-9); near(p.allocFree, 900, 1e-9);
 });
-test('если в подспособности больше, чем осталось у родителя, показывается перебор', () => {
+test('счётчик 2 у способности: −200 AP (по 100 за подспособность)', () => {
   const c = clone(KENOS);
-  c.abilities = [{ id: 'p', name: 'P', description: '{реакция 100%}', ap: 1000, alloc: { reaction: 900 } }, { id: 'k', parentId: 'p', name: 'K', description: '', ap: 300 }];
-  near(run(c, 'base').derived.abilities.find(a => a.id === 'p').allocFree, -200, 1e-9);
+  c.abilities = [{ id: 'p', name: 'P', description: '{реакция 100%}', ap: 1000, alloc: { reaction: 900 }, subCount: 2 }];
+  const p = run(c, 'base').derived.abilities[0];
+  near(p.childAp, 200, 1e-9); near(p.allocFree, -100, 1e-9);
+});
+section('Олицетворение');
+const persona = (total, at, extra) => { const c = clone(KENOS); c.ap = total; c.abilities = [{ id: 'n', name: 'N', description: '{дебафф 10%}', ap: 300 }, Object.assign({ id: 'o', name: 'O', persona: true, personaAp: at, description: '{сила 150%}, {дебафф 100%}, 500 °C и -50 °C' }, extra || {})]; return run(c, 'base').derived.abilities; };
+test('получено на 2000 AP, всего 5000 → доступно 3000 AP (3 усиления), олицетворение первым в списке', () => {
+  const r = persona(5000, 2000); assert.strictEqual(r[0].id, 'o'); assert.strictEqual(r[0].persona, true);
+  near(r[0].ap, 3000, 1e-9); assert.strictEqual(r[0].upgradeSteps, 3);
+});
+test('неполная тысяча не считается: 2000 → 3999 даёт 1000 AP', () => { near(persona(3999, 2000)[0].ap, 1000, 1e-9); });
+test('за 1000 AP: стат +150%, бафф/дебафф +100%, нагрев +500 °C, охлаждение −80 °C', () => {
+  const o = persona(5000, 2000, { alloc: { punch: 1000, status: 1000, heat: 1000, cold: 1000 } })[0];
+  near(o.lines.find(l => l.key === 'punch').percentNow, 300, 1e-9);
+  near(o.lines.find(l => l.kind === 'effect').percentNow, 200, 1e-9);
+  near(o.temps.find(t => t.key === 'heat').value, 1000, 1e-9);
+  near(o.temps.find(t => t.key === 'cold').value, -130, 1e-9);
+  near(o.allocFree, -1000, 1e-9);
+});
+test('подспособности олицетворения: счётчик 2 = −2000 AP', () => {
+  const o = persona(5000, 2000, { subCount: 2 })[0]; near(o.childAp, 2000, 1e-9); near(o.allocFree, 1000, 1e-9);
+});
+test('обычная способность рядом прокачивается по-старому (100 AP = +20% дебаффа)', () => {
+  const n0 = persona(5000, 2000)[1]; assert.strictEqual(n0.persona, false); near(n0.upgrade.stepAp, 100, 1e-9);
 });
 section('Одарённость');
 const gifted = g => { const c = clone(KENOS); c.gift = g; return run(c, 'base'); };

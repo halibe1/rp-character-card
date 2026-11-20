@@ -27,7 +27,7 @@
     if (RULES.maxTraits) c.traits = c.traits.slice(0, RULES.maxTraits);
     c.buffs = c.buffs.map(upgradeBuff);
     if (typeof c.gift !== 'string' || !(RULES.gifts || {})[c.gift]) c.gift = '';
-    c.abilities = (Array.isArray(c.abilities) ? c.abilities : []).filter(function (a) { return a && typeof a === 'object'; }).slice(0, RULES.abilities.max).map(normAbility);
+    c.abilities = onePersona((Array.isArray(c.abilities) ? c.abilities : []).filter(function (a) { return a && typeof a === 'object'; }).slice(0, RULES.abilities.max).map(normAbility));
     // арт — только картинка из браузера или https-ссылка (данные других игроков не доверенные)
     if (typeof c.art !== 'string' || !/^(data:image\/|https:\/\/)/.test(c.art)) c.art = null;
     return c;
@@ -44,11 +44,17 @@
   /** Способность атрибута в полном формате (данные могут быть чужими: приводим типы). */
   function normAbility(a) {
     return { id: String(a.id || makeBuffId()), name: String(a.name || ''), description: String(a.description || ''), upkeepNote: String(a.upkeepNote || ''),
-      parentId: String(a.parentId || ''), fixedCost: a.fixedCost === true, alloc: normAlloc(a.alloc), pros: normList(a.pros), cons: normList(a.cons), ap: a.ap === undefined || a.ap === '' ? 0 : a.ap,
+      parentId: String(a.parentId || ''), fixedCost: a.fixedCost === true, persona: a.persona === true, personaAp: a.personaAp === undefined || a.personaAp === '' ? RULES.abilities.personaUnlockAp || 1000 : a.personaAp, subCount: a.subCount === undefined || a.subCount === '' ? 0 : a.subCount, alloc: normAlloc(a.alloc), pros: normList(a.pros), cons: normList(a.cons), ap: a.ap === undefined || a.ap === '' ? 0 : a.ap,
       entryCost: a.entryCost === undefined ? null : a.entryCost, upkeepCost: a.upkeepCost === undefined ? null : a.upkeepCost,
       images: (Array.isArray(a.images) ? a.images : []).filter(function (u) { return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u); }).slice(0, RULES.abilities.maxImages || 6) };
   }  var ALLOC_KEYS = ['punch', 'lift', 'speed', 'reaction', 'durability', 'all', 'status', 'statusAll', 'unique', 'radius', 'other', 'heat', 'cold'];
   var ALLOC_LABEL = { punch: 'Сила удара', speed: 'Скорость', durability: 'Прочность', radius: 'Радиус / дальность', other: 'Прочие числа', lift: 'Сила на подъём', reaction: 'Реакция', all: 'Все статы (удар, подъём, скорость, реакция)', statusAll: 'Эффект на все статы цели', unique: 'Уникальный счётчик', status: 'Эффект на цель (бафф / дебафф)', heat: 'Нагрев, °C', cold: 'Охлаждение, °C' };
+  /** Олицетворение у персонажа одно и только у основной способности. */
+  function onePersona(list) {
+    var seen = false;
+    list.forEach(function (a) { if (a.persona && (seen || a.parentId)) a.persona = false; if (a.persona) seen = true; });
+    return list;
+  }
   function normList(v) { return (Array.isArray(v) ? v : []).map(function (x) { return String(x == null ? '' : x); }); }
   function normAlloc(al) {
     var o = {}; ALLOC_KEYS.forEach(function (k) { var v = al ? parseFloat(al[k]) : 0; o[k] = isFinite(v) && v > 0 ? v : 0; }); return o;
@@ -83,9 +89,10 @@
     c.abilities = (c.abilities || []).filter(function (a) { return String(a.name || '').trim(); }).slice(0, RULES.abilities.max).map(function (a) {
       ids[String(a.id || '')] = true;
       return { id: String(a.id || makeBuffId()), name: String(a.name).trim(), description: String(a.description || '').trim(), upkeepNote: String(a.upkeepNote || '').trim(), parentId: String(a.parentId || ''),
-        fixedCost: a.fixedCost === true, alloc: cleanAlloc(a), pros: normList(a.pros).map(function (s) { return s.trim(); }).filter(Boolean), cons: normList(a.cons).map(function (s) { return s.trim(); }).filter(Boolean), ap: Math.max(0, n(a.ap) || 0), entryCost: n(a.entryCost), upkeepCost: n(a.upkeepCost),
+        fixedCost: a.fixedCost === true, persona: a.persona === true, personaAp: Math.max(0, n(a.personaAp) || 0), subCount: Math.max(0, Math.floor(n(a.subCount) || 0)), alloc: cleanAlloc(a), pros: normList(a.pros).map(function (s) { return s.trim(); }).filter(Boolean), cons: normList(a.cons).map(function (s) { return s.trim(); }).filter(Boolean), ap: Math.max(0, n(a.ap) || 0), entryCost: n(a.entryCost), upkeepCost: n(a.upkeepCost),
         images: (Array.isArray(a.images) ? a.images : []).filter(function (u) { return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u); }).slice(0, RULES.abilities.maxImages || 6) };
     });    c.abilities.forEach(function (a) { if (!ids[a.parentId] || a.parentId === a.id) a.parentId = ''; });
+    onePersona(c.abilities);
     c.buffs = c.buffs.filter(function (b) { return n(b.percent); }).map(function (b) {
       var u = upgradeBuff(Object.assign({}, b, { percent: n(b.percent) }));
       var scoped = RULES.modifiers[u.stat] && RULES.modifiers[u.stat].scoped;
@@ -95,5 +102,5 @@
   }
 
 
-  window.RPModel = { blankCharacter: blankCharacter, normalize: normalize, upgradeBuff: upgradeBuff, normAbility: normAbility, normList: normList, normAlloc: normAlloc, ALLOC_KEYS: ALLOC_KEYS, ALLOC_LABEL: ALLOC_LABEL, makeBuffId: makeBuffId, makeId: makeId, cleanDraft: cleanDraft };
+  window.RPModel = { blankCharacter: blankCharacter, normalize: normalize, upgradeBuff: upgradeBuff, normAbility: normAbility, normList: normList, onePersona: onePersona, normAlloc: normAlloc, ALLOC_KEYS: ALLOC_KEYS, ALLOC_LABEL: ALLOC_LABEL, makeBuffId: makeBuffId, makeId: makeId, cleanDraft: cleanDraft };
 })();

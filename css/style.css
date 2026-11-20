@@ -1021,3 +1021,19 @@ body.is-capturing { cursor: progress; }
   .tg-r > span { border-bottom: 0; }
   .tg-r > .tg-n { grid-column: 1 / -1; padding-top: 0; border-bottom: 1px dashed rgba(168, 85, 247, .12); }
 }
+
+/* ---------- олицетворение атрибута ---------- */
+.abx.is-persona { position: relative; border-color: rgba(232, 121, 249, .55);
+  background: radial-gradient(120% 140% at 0% 0%, rgba(232, 121, 249, .16), transparent 55%), linear-gradient(160deg, rgba(56, 18, 82, .75), rgba(18, 8, 34, .7));
+  box-shadow: 0 0 0 1px rgba(232, 121, 249, .15) inset, 0 0 26px rgba(232, 121, 249, .18); }
+.abx.is-persona::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--hot), var(--silver), var(--hot), transparent); background-size: 200% 100%; animation: persona-sheen 6s linear infinite; }
+@keyframes persona-sheen { from { background-position: 200% 0; } to { background-position: 0 0; } }
+.abx.is-persona .abx-kind { color: var(--hot); letter-spacing: .12em; }
+.abx.is-persona .abx-title h3 { background: linear-gradient(90deg, #fff, var(--silver) 40%, #f5d0fe); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.abx-chip.ap.persona { border-color: rgba(232, 121, 249, .55); background: rgba(232, 121, 249, .14); }
+.abx-chip.ap.persona b { color: #fbe7ff; }
+.ab-edit.persona { border-color: rgba(232, 121, 249, .5); background: linear-gradient(160deg, rgba(232, 121, 249, .1), transparent 60%); box-shadow: 0 0 20px rgba(232, 121, 249, .12); }
+.ab-tag.persona { border-color: rgba(232, 121, 249, .55); background: rgba(232, 121, 249, .14); color: #fbe7ff; }
+.ab-pers-chk { margin-top: 6px; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .abx.is-persona::before { animation: none; } }

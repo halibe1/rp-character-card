@@ -202,6 +202,8 @@
     "max": 12,
     "maxImages": 6,
     "upgrade": { "stepAp": 100, "physPercentPerStep": 30, "statusPercentPerStep": 20, "distancePercentPerStep": 15, "heatPerStep": 50, "coldPerStep": 20 },
+    "personaUpgrade": { "stepAp": 1000, "physPercentPerStep": 150, "statusPercentPerStep": 100, "distancePercentPerStep": 75, "heatPerStep": 500, "coldPerStep": 80 },
+    "personaUnlockAp": 1000,
     "effects": {
       "buff":   { "label": "Бафф союзника", "aliases": ["бафф", "баф", "buff", "союзник", "усиление"] },
       "debuff": { "label": "Дебафф врага",  "aliases": ["дебафф", "дебаф", "debuff", "враг", "ослабление"] },

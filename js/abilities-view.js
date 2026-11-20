@@ -12,21 +12,22 @@
     function pctTxt(v) { return fmt(v, v % 1 ? 1 : 0) + '%'; }
     var UPG_KEYS = [['radius', 'Радиус / дальность'], ['other', 'Прочие числа'], ['punch', 'Сила удара'], ['speed', 'Скорость'], ['durability', 'Прочность'], ['lift', 'Сила на подъём'], ['reaction', 'Реакция'], ['all', 'Все статы'], ['status', 'Эффект на цель'], ['statusAll', 'Эффект на все статы цели'], ['unique', 'Уникальный счётчик'], ['heat', 'Нагрев, °C'], ['cold', 'Охлаждение, °C']];
     var EXTRA = { status: 1, heat: 1, cold: 1, all: 1, statusAll: 1, unique: 1 };
-    function gainTxt(key, ap) { return window.RPEngine.upgradeText(key, ap, RULES); }
+    function rulesOf(a) { return a && a.persona ? window.RPEngine.personaRules(RULES) : RULES; }
+    function gainTxt(key, ap, a) { return window.RPEngine.upgradeText(key, ap, rulesOf(a)); }
     function mulTxt(f, pctVal) { return '×' + fmt(f, 2) + (pctVal === undefined ? '' : '<small>(' + pctTxt(pctVal) + ')</small>'); }
     /** Сколько AP вложено в каждый показатель способности и как изменился множитель (было → стало). */
     function allocBlock(a, mark) {
       if ((!a.ap && !a.allocTotal) || !a.targets.length) return '';
-      var U = RULES.abilities.upgrade, rows = UPG_KEYS.filter(function (kv) { return a.targets.indexOf(kv[0]) !== -1; }).map(function (kv) {
+      var U = a.upgrade || RULES.abilities.upgrade, rows = UPG_KEYS.filter(function (kv) { return a.targets.indexOf(kv[0]) !== -1; }).map(function (kv) {
         var key = kv[0], ap = a.alloc[key] || 0, l = a.lines.filter(function (x) { return x.key === key; })[0], eff = '';
-        if (EXTRA[key]) eff = gainTxt(key, ap) + (key === 'unique' ? ' к значению счётчика' : key === 'status' || key === 'statusAll' ? ' к проценту бафа / дебафа' : key === 'all' ? ' к каждому из 4 показателей (удар, подъём, скорость, реакция)' : ' к максимуму');
+        if (EXTRA[key]) eff = gainTxt(key, ap, a) + (key === 'unique' ? ' к значению счётчика' : key === 'status' || key === 'statusAll' ? ' к проценту бафа / дебафа' : key === 'all' ? ' к каждому из 4 показателей (удар, подъём, скорость, реакция)' : ' к максимуму');
         else if (key === 'radius' || key === 'other') eff = mulTxt(1) + ' → ' + mulTxt(1 + ap / U.stepAp * U.distancePercentPerStep / 100) + ' (+' + fmt(ap / U.stepAp * U.distancePercentPerStep, 1) + '% от начального)';
         else if (l && l.child) eff = mulTxt(l.k0) + ' → ' + mulTxt(l.k) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
         else if (l) eff = mulTxt(l.factor, l.percent) + ' → ' + mulTxt(l.factorUp || l.factorNow, l.percentUp !== undefined ? l.percentUp : l.percentNow) + (l.bonusPp ? ' (+' + fmt(l.bonusPp, 1) + '%)' : '');
         else if (ap) eff = '+' + fmt(ap / U.stepAp * U.physPercentPerStep, 1) + '% (в описании нет метки)';
         return '<div class="upg-row' + (key === mark ? ' me' : '') + '"><span>' + kv[1] + '</span><b>' + fmt(ap, 0) + ' AP</b><span class="upg-eff">' + eff + '</span></div>';
       }).join('');
-      return '<div class="upg"><div class="upg-h">Вложено в способность: ' + fmt(a.allocTotal + (a.childAp || 0), 0) + ' из ' + fmt(a.ap, 0) + ' AP' + (a.childAp ? ' (в подспособности ' + fmt(a.childAp, 0) + ')' : '') + (a.allocFree > 0 ? ' · свободно ' + fmt(a.allocFree, 0) : '') + (a.allocFree < 0 ? ' · <em>вложено больше, чем AP способности</em>' : '') + '</div>' + rows + '</div>';
+      return '<div class="upg"><div class="upg-h">' + (a.persona ? 'Олицетворение: получено на ' + fmt(a.personaAp, 0) + ' AP, доступно ' + fmt(a.ap, 0) + ' AP (по ' + fmt(U.stepAp, 0) + ' за усиление). Вложено ' + fmt(a.allocTotal + (a.childAp || 0), 0) : 'Вложено в способность: ' + fmt(a.allocTotal + (a.childAp || 0), 0) + ' из ' + fmt(a.ap, 0) + ' AP') + (a.childAp ? ' (подспособности: ' + fmt(a.subCount, 0) + ' × ' + fmt(U.stepAp, 0) + ')' : '') + (a.allocFree > 0 ? ' · свободно ' + fmt(a.allocFree, 0) : '') + (a.allocFree < 0 ? ' · <em>вложено больше, чем доступно</em>' : '') + '</div>' + rows + '</div>';
     }
     function effHtml(l, a) {
       var deb = l.effect === 'debuff', uq = l.effect === 'unique', up = l.bonusPp > 0, mark = deb ? '÷' : '×';
@@ -65,7 +66,7 @@
         if (s.temp) {
           var tp = s.temp, cold = tp.key === 'cold', shown = (tp.plus && tp.value >= 0 ? '+' : '') + fmt(tp.value, Math.abs(tp.value - Math.round(tp.value)) < 1e-9 ? 0 : 1).replace('-', '−') + tp.suffix;
           if (!tp.gain) return esc((tp.plus ? '+' : '') + fmt(tp.num, tp.num % 1 ? 1 : 0).replace('-', '−') + tp.suffix);
-          return '<span class="ab-sc ab-temp ' + tp.key + '"' + tipAttr(cold ? 'Охлаждение' : 'Нагрев', tp.formula, 'Было ' + fmt(tp.num, 1) + ' °C. ' + (cold ? 'Каждые ' + RULES.abilities.upgrade.stepAp + ' AP понижают температуру на ' + RULES.abilities.upgrade.coldPerStep + ' °C.' : 'Каждые ' + RULES.abilities.upgrade.stepAp + ' AP повышают максимальную температуру на ' + RULES.abilities.upgrade.heatPerStep + ' °C.') + allocBlock(a, tp.key)) + '>' + esc(shown) + '<span class="ab-up" title="прокачано">▲</span></span>';
+          return '<span class="ab-sc ab-temp ' + tp.key + '"' + tipAttr(cold ? 'Охлаждение' : 'Нагрев', tp.formula, 'Было ' + fmt(tp.num, 1) + ' °C. ' + (cold ? 'Каждые ' + (a.upgrade || RULES.abilities.upgrade).stepAp + ' AP понижают температуру на ' + (a.upgrade || RULES.abilities.upgrade).coldPerStep + ' °C.' : 'Каждые ' + (a.upgrade || RULES.abilities.upgrade).stepAp + ' AP повышают максимальную температуру на ' + (a.upgrade || RULES.abilities.upgrade).heatPerStep + ' °C.') + allocBlock(a, tp.key)) + '>' + esc(shown) + '<span class="ab-up" title="прокачано">▲</span></span>';
         }
         if (s.fixed !== undefined) return '<span class="ab-fix"' + tipAttr('Не меняется', null, 'Это число помечено исключением: сила атрибута его не увеличивает.') + '>' + esc(s.fixed) + '</span>';
         if (s.scaled) {
@@ -79,15 +80,15 @@
     function upgradeHtml(a) {
       if ((!a.ap && !a.allocTotal) || !a.targets.length) return '';
       var parts = UPG_KEYS.filter(function (kv) { return a.alloc[kv[0]] > 0; }).map(function (kv) {
-        var key = kv[0], l = a.lines.filter(function (x) { return x.key === key; })[0], U = RULES.abilities.upgrade, eff;
-        if (EXTRA[key]) eff = gainTxt(key, a.alloc[key]);
+        var key = kv[0], l = a.lines.filter(function (x) { return x.key === key; })[0], U = a.upgrade || RULES.abilities.upgrade, eff;
+        if (EXTRA[key]) eff = gainTxt(key, a.alloc[key], a);
         else if (key === 'radius' || key === 'other') eff = '×' + fmt(1 + a.alloc[key] / U.stepAp * U.distancePercentPerStep / 100, 2);
         else if (l && l.child) eff = '×' + fmt(l.k0, 2) + ' → ×' + fmt(l.k, 2);
         else if (l) eff = '×' + fmt(l.factor, 2) + ' → ×' + fmt(l.factorUp || l.factorNow, 2);
         else eff = '+' + fmt(a.alloc[key] / U.stepAp * U.physPercentPerStep, 1) + '%';
         return '<span class="upg-chip">' + kv[1] + ' <b>' + fmt(a.alloc[key], 0) + ' AP</b> <small>' + eff + '</small></span>';
       });
-      if (a.childAp) parts.push('<span class="upg-chip">Подспособности <b>' + fmt(a.childAp, 0) + ' AP</b></span>');
+      if (a.childAp) parts.push('<span class="upg-chip">Подспособности ×' + fmt(a.subCount, 0) + ' <b>' + fmt(a.childAp, 0) + ' AP</b></span>');
       return '<div class="upg-line" ' + tipAttr('Прокачка', null, allocBlock(a, '')).slice(1) + '>' + (parts.length ? parts.join('') : '<span class="hint">AP ещё не распределены</span>') +
         ' <small>' + (a.allocFree !== 0 ? (a.allocFree > 0 ? 'свободно ' + fmt(a.allocFree, 0) + ' AP' : 'перебор ' + fmt(-a.allocFree, 0) + ' AP') : 'всё распределено') + '</small></div>';
     }
@@ -121,11 +122,11 @@
       var gal = galleryHtml(a); if (gal) body += section('Изображения', gal);
       var up = upgradeHtml(a); if (up) body += section('Прокачка', up);
       body += kids(a).map(function (k) { return block(k, depth + 1, 0); }).join('');
-      return '<article class="abx' + (depth ? ' is-sub' : '') + (open ? '' : ' is-closed') + '">' +
+      return '<article class="abx' + (depth ? ' is-sub' : '') + (a.persona ? ' is-persona' : '') + (open ? '' : ' is-closed') + '">' +
         '<header class="abx-head" role="button" tabindex="0" aria-expanded="' + open + '" data-ab-toggle="' + esc(key) + '">' +
         '<span class="abx-chev" aria-hidden="true"></span>' +
-        '<div class="abx-title"><span class="abx-kind">' + (depth ? 'Подспособность' : 'Способность') + '</span><h3>' + esc(a.name || 'Без названия') + '</h3></div>' +
-        '<div class="abx-meta">' + (a.ap ? '<span class="abx-chip ap"><b>' + fmt(a.ap, 0) + '</b><small>AP</small></span>' : '') + costChips(a) + '</div>' +
+        '<div class="abx-title"><span class="abx-kind">' + (depth ? 'Подспособность' : a.persona ? '✦ Олицетворение атрибута' : 'Способность') + '</span><h3>' + esc(a.name || 'Без названия') + '</h3></div>' +
+        '<div class="abx-meta">' + (a.persona ? '<span class="abx-chip ap persona"' + tipAttr('Олицетворение', null, 'Получено на ' + fmt(a.personaAp, 0) + ' общего AP. Каждая полная тысяча общего AP после этого — одно усиление или одна подспособность.') + '><b>' + fmt(a.upgradeSteps, 0) + '</b><small>усил. · с ' + fmt(a.personaAp, 0) + ' AP</small></span>' : a.ap ? '<span class="abx-chip ap"><b>' + fmt(a.ap, 0) + '</b><small>AP</small></span>' : '') + costChips(a) + '</div>' +
         '<div class="abx-sum">' + sumChips(a) + '</div></header>' +
         '<div class="abx-body">' + body + '</div></article>';
     }

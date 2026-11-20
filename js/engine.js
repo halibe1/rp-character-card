@@ -486,7 +486,18 @@
     plain(text.slice(last));
     return out;
   }
+  /** Правила, в которых прокачка способностей заменена на прокачку олицетворения (шаг 1000 AP общего счётчика). */
+  function personaRules(rules) {
+    var pu = rules.abilities.personaUpgrade; if (!pu) return rules;
+    return Object.assign({}, rules, { abilities: Object.assign({}, rules.abilities, { upgrade: pu }) });
+  }
+  /** Олицетворение: AP для прокачки = полные тысячи общего AP, набранные после получения. */
+  function personaPool(totalAp, gotAt, rules) {
+    var pu = rules.abilities.personaUpgrade || rules.abilities.upgrade, d = (num(totalAp, 0) || 0) - (num(gotAt, 0) || 0);
+    return d > 0 ? Math.floor(d / pu.stepAp) * pu.stepAp : 0;
+  }
   function abilityStats(list, user, power, ap, rules) {
+    var baseRules = rules, persRules = personaRules(rules);
     var defs = rules.abilities.stats, items = (list || []).filter(function (a) { return a && a.id; });
     var byId = {}, done = {}, busy = {};
     items.forEach(function (a) { byId[a.id] = a; });
@@ -495,6 +506,7 @@
       if (done[a.id]) return done[a.id];
       if (busy[a.id]) return null;               // цикл родителей: считаем как основную
       busy[a.id] = true;
+      var persona = a.persona === true && !a.parentId, rules = persona ? persRules : baseRules;
       var parent = a.parentId && a.parentId !== a.id && byId[a.parentId] ? build(byId[a.parentId]) : null;
       var lines = [], U = rules.abilities.upgrade;
       var targets = abilityTargets(a, rules), alloc = {};
@@ -540,7 +552,7 @@
       var strs = function (v) { return (Array.isArray(v) ? v : []).map(function (x) { return String(x == null ? '' : x).trim(); }).filter(Boolean); };
       var prosSegs = strs(a.pros).map(segsFor), consSegs = strs(a.cons).map(segsFor);
       var fixed = !!a.fixedCost;
-      var res = { id: a.id, name: a.name || '', description: a.description || '', ap: num(a.ap, 0), parentId: parent ? a.parentId : '', parentName: parent ? parent.name : '',
+      var res = { id: a.id, name: a.name || '', description: a.description || '', ap: persona ? personaPool(ap, a.personaAp, rules) : num(a.ap, 0), persona: persona, personaAp: persona ? num(a.personaAp, 0) : null, upgrade: U, subCount: Math.max(0, Math.floor(num(a.subCount, 0) || 0)), parentId: parent ? a.parentId : '', parentName: parent ? parent.name : '',
         entry: num(a.entryCost, null), upkeep: num(a.upkeepCost, null), upkeepNote: a.upkeepNote || '', fixedCost: fixed, segments: segments, pros: prosSegs, cons: consSegs, lines: lines, temps: temps,
         images: (Array.isArray(a.images) ? a.images : []).filter(function (u) { return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u); }).slice(0, rules.abilities.maxImages || 6) };
       var total = 0; Object.keys(alloc).forEach(function (k) { total += alloc[k]; });
@@ -551,11 +563,13 @@
       return res;
     }
     var out = items.map(build).filter(Boolean);
-    // AP, вложенные в подспособности, берутся из пула родителя: они уже «потрачены» и не считаются свободными
+    // подспособности, добавленные прокачкой (счётчик subCount), стоят по шагу прокачки каждая: 100 AP, у олицетворения 1000
     out.forEach(function (r) {
-      var kids = 0; out.forEach(function (c) { if (c.parentId === r.id) kids += c.ap; });
-      r.childAp = kids; r.allocFree = r.ap - r.allocTotal - kids;
+      r.childAp = r.subCount * r.upgrade.stepAp; r.allocFree = r.ap - r.allocTotal - r.childAp;
+      r.upgradeSteps = Math.floor(r.ap / r.upgrade.stepAp);
     });
+    // олицетворение всегда первым
+    out.sort(function (x, y) { return (y.persona ? 1 : 0) - (x.persona ? 1 : 0); });
     return out;
   }
   /* ---------- калькуляторы ---------- */
@@ -666,7 +680,7 @@
     pressure: pressure, waterRun: waterRun, reactionCheck: reactionCheck, structureCast: structureCast,
     attributeEndurance: attributeEndurance, staminaRecovery: staminaRecovery, woundsAgainst: woundsAgainst,
     erosion: erosion, martialProgress: martialProgress, apProgress: apProgress,
-    parseAbilityText: parseAbilityText, upgradeGain: upgradeGain, upgradeText: upgradeText, ALLOC_ORDER: ALLOC_ORDER, kmhToMs: kmhToMs, msToKmh: msToKmh, PHYS: PHYS, ALL: ALL
+    parseAbilityText: parseAbilityText, personaRules: personaRules, personaPool: personaPool, upgradeGain: upgradeGain, upgradeText: upgradeText, ALLOC_ORDER: ALLOC_ORDER, kmhToMs: kmhToMs, msToKmh: msToKmh, PHYS: PHYS, ALL: ALL
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RPEngine = api;
