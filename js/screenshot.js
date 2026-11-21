@@ -231,10 +231,11 @@
     if (!size.h) { size.h = Math.ceil(frame.scrollHeight); host.style.height = size.h + 'px'; }
     document.body.classList.add('is-capturing');
 
+    var ratios = kind === 'ability' ? [2, 1.5] : RATIOS;   // способность: 2000 px в ширину хватает, файл вдвое легче
     function attempt(i, lastErr) {
-      if (i >= RATIOS.length) return Promise.reject(lastErr);
-      return render(frame, size, RATIOS[i], ctx, fontCSS).then(function (out) { out.ratio = RATIOS[i]; return out; }, function (e) {
-        console.warn('Скриншот с pixelRatio ' + RATIOS[i] + ' не удался', e);
+      if (i >= ratios.length) return Promise.reject(lastErr);
+      return render(frame, size, ratios[i], ctx, fontCSS).then(function (out) { out.ratio = ratios[i]; return out; }, function (e) {
+        console.warn('Скриншот с pixelRatio ' + ratios[i] + ' не удался', e);
         return attempt(i + 1, e);
       });
     }
