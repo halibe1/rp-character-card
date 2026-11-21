@@ -18,7 +18,7 @@
 (function (root) {
   'use strict';
 
-  var SIZES = { full: { w: 1920, h: 1080 }, card: { w: 1080, h: 1350 } };
+  var SIZES = { full: { w: 1920, h: 1080 }, card: { w: 1080, h: 1350 }, ability: { w: 1000, h: 0 } };   // у способности высота по содержимому
   var RATIOS = [3, 2];
   var BG = '#0b0614';
 
@@ -91,6 +91,25 @@
     each(frame, '[id]', function (n) { n.removeAttribute('id'); });
     each(frame, '[data-tip]', function (n) { n.removeAttribute('data-tip'); });
     each(frame, 'select, input, textarea', function (n) { n.setAttribute('tabindex', '-1'); });
+  }
+  /** Скрин одной способности: шапка (персонаж, атрибут, режим) + карточка способности, развёрнутая вместе с подспособностями. */
+  function buildAbility(ctx) {
+    var frame = el('div', 'xp-frame xp-ability exporting');
+    var cap = '<div class="xp-ab-who"><b>' + esc(ctx.name) + '</b>' + (ctx.attribute ? '<span>Атрибут · ' + esc(ctx.attribute) + '</span>' : '') + '</div>' +
+      '<div class="xp-ab-pills"><span class="xp-pill"><span class="dot"></span>Режим · <b>' + esc(ctx.modeLabel) + '</b></span>' +
+      (ctx.wounds.length ? '<span class="xp-pill hot">Ранения: <b>' + esc(ctx.wounds.join(', ')) + '</b></span>' : '') + '</div>';
+    frame.appendChild(el('div', 'xp-ab-head', cap));
+    var list = el('div', 'ab-list');
+    var card = ctx.abilityEl.cloneNode(true);
+    if (card.classList.contains('is-closed')) card.classList.remove('is-closed');
+    each(card, '.abx.is-closed', function (n) { n.classList.remove('is-closed'); });
+    each(card, '[aria-expanded]', function (n) { n.setAttribute('aria-expanded', 'true'); });
+    each(card, '.abx-shot, .abx-chev', function (n) { n.remove(); });
+    each(card, 'img.ab-img.zoom', function (n) { n.classList.remove('zoom'); });
+    list.appendChild(card);
+    frame.appendChild(list);
+    frame.appendChild(el('div', 'xp-ab-foot', 'Карточка персонажа РП · значения посчитаны от статов в режиме «' + esc(ctx.modeLabel) + '»'));
+    return frame;
   }
 
   /* ---------- шрифты ----------
@@ -201,14 +220,15 @@
     if (busy) return Promise.reject(new Error('скриншот уже готовится'));
     if (!root.htmlToImage) return Promise.reject(new Error('библиотека html-to-image не загрузилась (нужен интернет)'));
     busy = true;
-    var size = SIZES[kind] || SIZES.full;
-    var name = slug(ctx.name) + '-' + ctx.mode + (kind === 'card' ? '-card' : '') + '.png';
+    var size = Object.assign({}, SIZES[kind] || SIZES.full);
+    var name = kind === 'ability' ? slug(ctx.name) + '-' + slug(ctx.abilityName || 'ability') + '.png' : slug(ctx.name) + '-' + ctx.mode + (kind === 'card' ? '-card' : '') + '.png';
     var host = el('div', 'xp-host');
-    host.style.width = size.w + 'px'; host.style.height = size.h + 'px';
-    var frame = kind === 'card' ? buildCard(ctx) : buildFull();
+    host.style.width = size.w + 'px'; host.style.height = size.h ? size.h + 'px' : 'auto';
+    var frame = kind === 'card' ? buildCard(ctx) : kind === 'ability' ? buildAbility(ctx) : buildFull();
     cleanup(frame, ctx);
     host.appendChild(frame);
     document.body.appendChild(host);
+    if (!size.h) { size.h = Math.ceil(frame.scrollHeight); host.style.height = size.h + 'px'; }
     document.body.classList.add('is-capturing');
 
     function attempt(i, lastErr) {

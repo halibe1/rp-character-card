@@ -127,7 +127,7 @@
         '<header class="abx-head" role="button" tabindex="0" aria-expanded="' + open + '" data-ab-toggle="' + esc(key) + '">' +
         '<span class="abx-chev" aria-hidden="true"></span>' +
         '<div class="abx-title"><span class="abx-kind">' + (depth ? 'Подспособность' : a.persona ? '✦ Олицетворение атрибута' : 'Способность') + '</span><h3>' + esc(a.name || 'Без названия') + '</h3></div>' +
-        '<div class="abx-meta">' + (a.persona ? '<span class="abx-chip ap persona"' + tipAttr('Олицетворение', null, 'Получено на ' + fmt(a.personaAp, 0) + ' общего AP. Каждая полная тысяча общего AP после этого — одно усиление или одна подспособность.') + '><b>' + fmt(a.upgradeSteps, 0) + '</b><small>усил. · с ' + fmt(a.personaAp, 0) + ' AP</small></span>' : a.ap ? '<span class="abx-chip ap"><b>' + fmt(a.ap, 0) + '</b><small>AP</small></span>' : '') + costChips(a) + '</div>' +
+        '<div class="abx-meta"><button type="button" class="abx-shot" data-ab-shot="' + esc(a.id) + '" title="Скачать скриншот способности" aria-label="Скриншот способности «' + esc(a.name || '') + '»">📷</button>' + (a.persona ? '<span class="abx-chip ap persona"' + tipAttr('Олицетворение', null, 'Получено на ' + fmt(a.personaAp, 0) + ' общего AP. Каждая полная тысяча общего AP после этого — одно усиление или одна подспособность.') + '><b>' + fmt(a.upgradeSteps, 0) + '</b><small>усил. · с ' + fmt(a.personaAp, 0) + ' AP</small></span>' : a.ap ? '<span class="abx-chip ap"><b>' + fmt(a.ap, 0) + '</b><small>AP</small></span>' : '') + costChips(a) + '</div>' +
         '<div class="abx-sum">' + sumChips(a) + '</div></header>' +
         '<div class="abx-body">' + body + '</div></article>';
     }

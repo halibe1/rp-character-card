@@ -1286,6 +1286,19 @@ function allocEditor(a, base, i) {
       if (tg && e.target === tg && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tg.click(); }
     });
     $('#modalBody').addEventListener('click', function (e) {
+      var shb = e.target.closest('[data-ab-shot]');
+      if (shb) {
+        e.stopPropagation();
+        var art = shb.closest('.abx'), abId = shb.getAttribute('data-ab-shot'), abR = R.derived.abilities.filter(function (x) { return x.id === abId; })[0];
+        if (!art || !window.RPShot) return;
+        shb.disabled = true; shb.textContent = '…';
+        toast('Готовлю скриншот способности…');
+        window.RPShot.capture('ability', Object.assign(shotContext(), { abilityEl: art, abilityName: abR ? abR.name : '', attribute: (ch.attribute && ch.attribute.name) || '' })).then(function (r) {
+          toast('Сохранено: ' + r.name + ' · ' + r.width + '×' + r.height);
+        }).catch(function (err) { console.error(err); toast('Скриншот не получился: ' + err.message); })
+          .then(function () { shb.disabled = false; shb.textContent = '📷'; });
+        return;
+      }
       var im = e.target.closest('img.ab-img'); if (im) { im.classList.toggle('zoom'); return; }
       var allb = e.target.closest('[data-ab-all]');
       if (allb) { var on = allb.getAttribute('data-ab-all') === '1'; R.derived.abilities.forEach(function (x) { abOpen[ch.id + ':' + x.id] = on; }); renderModal(); return; }
