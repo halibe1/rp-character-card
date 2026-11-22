@@ -260,9 +260,14 @@
   function powerAspects(m) {
     return ['radius', 'power', 'speed'].map(function (sc) { return RULES.scopes[sc].label.toLowerCase() + ' ' + fmt(m.scopes[sc].value, 0) + '%'; }).join(' · ');
   }
+  /** Строка про лимит системы статусов для тултипа. */
+  function capNote(key) {
+    var c = (RULES.statusCaps || {})[key]; if (!c) return '';
+    return '<div class="tt-sub">Лимит системы статусов</div><div>Бафы ×' + fmt(c.buff, 1) + (c.extBuff ? ', внешний ещё ×' + fmt(c.extBuff, 1) : '') + ' (всего до ×' + fmt(c.buffTotal, 1) + '); дебафы ÷' + fmt(c.debuff, 1) + ', с внешним ÷' + fmt(c.debuffTotal, 1) + '.</div>';
+  }
   function powerTipHtml(m) {
-    var def = RULES.modifiers[m.key];
-    return '<div>' + esc(def.desc) + '</div>' + Object.keys(RULES.scopes).map(function (sc) {
+    var def = RULES.modifiers[m.key], hit = Object.keys(m.scopes).some(function (sc) { return m.scopes[sc].capped; });
+    return '<div>' + esc(def.desc) + '</div>' + (hit ? '<div class="cap-hit">⚠ Упёрлось в лимит статусов — лишние бафы не действуют.</div>' : '') + capNote(m.key) + Object.keys(RULES.scopes).map(function (sc) {
       return '<div class="tt-sub">' + esc(RULES.scopes[sc].label) + (sc === 'all' ? ' <small>(только бонусы «все аспекты»)</small>' : '') + '</div>' + chainHtml(m.scopes[sc], '%', 1, sc !== 'all');
     }).join('');
   }
@@ -284,7 +289,7 @@
     var d = R.derived, mt = d.meleeTiming, sm = d.stamina;
     // главное: прочность крупно, рядом два боевых показателя
     var main = [
-      dcell('Прочность', fmt(d.durability.value, 0), 'кг', 'сила удара × 3', 'Прочность', d.durability.formula, 'Минимум без индивидуального дебаффа: ' + d.durability.min + ' кг (до множителя прочности).' + chainHtml(d.durability.chain, 'кг', 0), 'hero'),
+      dcell('Прочность', fmt(d.durability.value, 0), 'кг', d.durability.capped ? '<span class="cap-hit">⚠ лимит статусов</span>' : 'сила удара × 3', 'Прочность', d.durability.formula, (d.durability.capped ? '<div class="cap-hit">⚠ Упёрлось в лимит статусов: без лимита было бы ' + fmt(d.durability.capped.before, 0) + ' кг.</div>' : '') + 'Минимум без индивидуального дебаффа: ' + d.durability.min + ' кг (до множителя прочности).' + chainHtml(d.durability.chain, 'кг', 0) + capNote('durability'), 'hero'),
       dcell('Скорость атаки', fmt(d.attackSpeed.kmh), 'км/ч', fmt(d.attackSpeed.ms, 2) + ' м/с', 'Скорость атаки', d.attackSpeed.formula, 'Скорость × ' + d.attackSpeed.multiplier + (d.attackSpeed.multiplier !== RULES.speed.attackMultiplier ? ' (одарённость)' : ''), 'key'),
       dcell('Взрывная сила', fmt(d.explosive.value, 0), 'кг', 'за ' + fmt(d.explosive.timeMs) + ' мс', 'Взрывная сила', d.explosive.formula + '; ' + d.explosive.timeFormula, 'Подъём × 2. Достигается за ½ реакции, но не дольше 100 мс.', 'key')
     ];

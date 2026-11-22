@@ -1060,3 +1060,6 @@ body.is-capturing { cursor: progress; }
 .abx-shot { width: 30px; height: 30px; display: inline-grid; place-items: center; padding: 0; border-radius: 9px; border: 1px solid var(--line); background: rgba(124, 58, 237, .14); color: var(--a4); cursor: pointer; font-size: 14px; line-height: 1; flex: none; }
 .abx-shot:hover { border-color: var(--line-strong); box-shadow: var(--glow); background: rgba(124, 58, 237, .3); }
 .abx-shot:disabled { opacity: .5; cursor: progress; }
+
+/* ---------- лимит системы статусов ---------- */
+.cap-hit { color: var(--hot); font-weight: 600; }

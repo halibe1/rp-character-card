@@ -526,6 +526,48 @@ test('подспособности олицетворения: счётчик 2 
 test('обычная способность рядом прокачивается по-старому (100 AP = +20% дебаффа)', () => {
   const n0 = persona(5000, 2000)[1]; assert.strictEqual(n0.persona, false); near(n0.upgrade.stepAp, 100, 1e-9);
 });
+section('Лимиты системы статусов');
+test('прочность: внутренние бафы не дальше ×4 (Кенос 3000 → максимум 12 000)', () => {
+  const r = run(kenos([{ stat: 'durability', percent: 300, mode: 'passive', layer: 'internal', source: 'attribute' }, { stat: 'punch', percent: 100, mode: 'passive', layer: 'internal', source: 'trait' }]), 'passive').derived.durability;
+  near(r.value, 12000); assert.ok(r.capped);
+});
+test('прочность: внешний бафф сверху ещё не больше ×1,5 (12 000 → 18 000)', () => {
+  const r = run(kenos([{ stat: 'durability', percent: 400, mode: 'passive', layer: 'internal', source: 'attribute' }, { stat: 'durability', percent: 200, mode: 'passive', layer: 'external', source: 'external' }]), 'passive').derived.durability;
+  near(r.value, 18000);
+});
+test('прочность: в пределах лимита ничего не меняется (+100% → 6000)', () => {
+  const r = run(kenos([{ stat: 'durability', percent: 100, mode: 'passive', layer: 'internal' }]), 'passive').derived.durability;
+  near(r.value, 6000); assert.strictEqual(r.capped, null);
+});
+test('прочность: дебафф не глубже ÷4,5 всего (3000 → не ниже 666,7)', () => {
+  const r = run(kenos([{ stat: 'durability', percent: 900, type: 'debuff', mode: 'passive', layer: 'internal' }, { stat: 'durability', percent: 100, type: 'debuff', mode: 'passive', layer: 'external' }]), 'passive').derived.durability;
+  near(r.value, 3000 / 4.5, 1e-6);
+});
+test('сила атрибута: внутренние не дальше ×3, с внешним — ×3,5', () => {
+  const m1 = run(kenos([{ stat: 'attrPower', percent: 400, mode: 'passive', layer: 'internal', source: 'attribute' }]), 'passive').derived.mods.attrPower;
+  near(m1.value, 300); assert.ok(m1.scopes.all.capped);
+  const m2 = run(kenos([{ stat: 'attrPower', percent: 400, mode: 'passive', layer: 'internal', source: 'attribute' }, { stat: 'attrPower', percent: 100, mode: 'passive', layer: 'external' }]), 'passive').derived.mods.attrPower;
+  near(m2.value, 350);
+});
+test('сила атрибута: дебафф не глубже ÷3,5 всего', () => {
+  const m = run(kenos([{ stat: 'attrPower', percent: 500, type: 'debuff', mode: 'passive', layer: 'internal' }, { stat: 'attrPower', percent: 500, type: 'debuff', mode: 'passive', layer: 'external' }]), 'passive').derived.mods.attrPower;
+  near(m.value, 100 / 3.5, 1e-6);
+});
+test('сила боевого искусства: не дальше ×2, с внешним ×2,5', () => {
+  const m = run(kenos([{ stat: 'artPower', percent: 300, mode: 'passive', layer: 'internal', source: 'style' }, { stat: 'artPower', percent: 300, mode: 'passive', layer: 'external' }]), 'passive').derived.mods.artPower;
+  near(m.value, 250);
+});
+test('лимит силы атрибута действует и на её усиление способностей: +400% силы → метка {сила 100%} даёт ×4, а не ×6', () => {
+  const c = kenos([{ stat: 'attrPower', percent: 400, mode: 'passive', layer: 'internal', source: 'attribute' }]);
+  c.abilities = [{ id: 'a', name: 'A', description: '{сила 100%}', ap: 0, alloc: {} }];
+  near(run(c, 'passive').derived.abilities[0].lines[0].effFactor, 4, 1e-9);
+});
+test('температура: не выше 5000 °C и не ниже −250 °C', () => {
+  const c = clone(KENOS); c.abilities = [{ id: 'a', name: 'A', description: 'Пламя 4800 °C и холод -200 °C', ap: 2000, alloc: { heat: 1000, cold: 1000 } }];
+  const t = run(c, 'base').derived.abilities[0].temps;
+  near(t.find(x => x.key === 'heat').value, 5000); near(t.find(x => x.key === 'cold').value, -250);
+  assert.ok(t[0].capped && t[1].capped);
+});
 section('Одарённость');
 const gifted = g => { const c = clone(KENOS); c.gift = g; return run(c, 'base'); };
 test('без одарённости эталон Кеноса не меняется', () => { const r = gifted(''); near(r.stats.punch.value, 1000); near(r.derived.durability.value, 3000); near(r.derived.attackSpeed.kmh, 15); });

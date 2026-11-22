@@ -66,8 +66,8 @@
         if (s.line) return numHtml(s.line, a);
         if (s.temp) {
           var tp = s.temp, cold = tp.key === 'cold', shown = (tp.plus && tp.value >= 0 ? '+' : '') + fmt(tp.value, Math.abs(tp.value - Math.round(tp.value)) < 1e-9 ? 0 : 1).replace('-', '−') + tp.suffix;
-          if (!tp.gain) return esc((tp.plus ? '+' : '') + fmt(tp.num, tp.num % 1 ? 1 : 0).replace('-', '−') + tp.suffix);
-          return '<span class="ab-sc ab-temp ' + tp.key + '"' + tipAttr(cold ? 'Охлаждение' : 'Нагрев', tp.formula, 'Было ' + fmt(tp.num, 1) + ' °C. ' + (cold ? 'Каждые ' + (a.upgrade || RULES.abilities.upgrade).stepAp + ' AP понижают температуру на ' + (a.upgrade || RULES.abilities.upgrade).coldPerStep + ' °C.' : 'Каждые ' + (a.upgrade || RULES.abilities.upgrade).stepAp + ' AP повышают максимальную температуру на ' + (a.upgrade || RULES.abilities.upgrade).heatPerStep + ' °C.') + allocBlock(a, tp.key)) + '>' + esc(shown) + '<span class="ab-up" title="прокачано">▲</span></span>';
+          if (!tp.gain && !tp.capped) return esc((tp.plus ? '+' : '') + fmt(tp.num, tp.num % 1 ? 1 : 0).replace('-', '−') + tp.suffix);
+          return '<span class="ab-sc ab-temp ' + tp.key + '"' + tipAttr(cold ? 'Охлаждение' : 'Нагрев', tp.formula, 'Было ' + fmt(tp.num, 1) + ' °C. ' + (tp.capped ? 'Предел системы статусов: от ' + RULES.statusCaps.temperature.min + ' до ' + RULES.statusCaps.temperature.max + ' °C. ' : '') + (cold ? 'Каждые ' + (a.upgrade || RULES.abilities.upgrade).stepAp + ' AP понижают температуру на ' + (a.upgrade || RULES.abilities.upgrade).coldPerStep + ' °C.' : 'Каждые ' + (a.upgrade || RULES.abilities.upgrade).stepAp + ' AP повышают максимальную температуру на ' + (a.upgrade || RULES.abilities.upgrade).heatPerStep + ' °C.') + allocBlock(a, tp.key)) + '>' + esc(shown) + (tp.gain ? '<span class="ab-up" title="прокачано">▲</span>' : '') + '</span>';
         }
         if (s.fixed !== undefined) return '<span class="ab-fix"' + tipAttr('Не меняется', null, 'Это число помечено исключением: сила атрибута его не увеличивает.') + '>' + esc(s.fixed) + '</span>';
         if (s.scaled) {

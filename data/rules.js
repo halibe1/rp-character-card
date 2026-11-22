@@ -78,6 +78,13 @@
     "artPower":   { "label": "Сила боевого искусства",    "base": 100, "unit": "%", "scoped": true,  "desc": "То же, что сила атрибута, но для приёмов боевого искусства." },
     "durability": { "label": "Множитель прочности",       "base": 1,   "unit": "кг", "scoped": false, "desc": "Множитель к прочности (сила удара × 3, минимум 1500 кг)." }
   },
+  "statusCaps": {
+    "durability": { "label": "Прочность",              "buff": 4, "extBuff": 1.5, "buffTotal": 6, "debuff": 4, "debuffTotal": 4.5 },
+    "attrPower":  { "label": "Сила атрибута",          "buff": 3, "buffTotal": 3.5, "debuff": 3, "debuffTotal": 3.5 },
+    "artPower":   { "label": "Сила боевого искусства", "buff": 2, "buffTotal": 2.5, "debuff": 2, "debuffTotal": 2.5 },
+    "temperature": { "min": -250, "max": 5000 }
+  },
+
   "scopes": {
     "all":    { "label": "Все аспекты" },
     "radius": { "label": "Радиус" },

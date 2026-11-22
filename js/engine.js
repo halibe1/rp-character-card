@@ -115,6 +115,37 @@
       formula: f + ' = ' + n(value, 1) };
   }
 
+  /** Множители слоёв цепочки: внутренний (атрибут, трейты, стиль, артефакты) и внешний (саппорты). */
+  function layerFactors(cn) {
+    var p = cn.parts || {}, g = function (k) { return p[k] ? p[k].factor : 1; };
+    return { internal: g('internalBuff') / g('internalDebuff'), external: g('externalBuff') / g('externalDebuff') };
+  }
+  /**
+   * Лимиты системы статусов: внутренние бафы не дальше ×buff (дебафы не глубже ÷debuff),
+   * внешний множитель не больше ×extBuff (если задан), итог не дальше ×buffTotal / ÷debuffTotal.
+   * fi, fe — множители слоёв относительно базы. Возвращает итоговый множитель и что сработало.
+   */
+  function statusCap(fi, fe, cap) {
+    if (!cap) return { factor: fi * fe, hit: [] };
+    var hit = [], ci = fi, ce = fe;
+    if (cap.buff && ci > cap.buff) { ci = cap.buff; hit.push('внутренние бафы ≤ ×' + cap.buff); }
+    if (cap.debuff && ci < 1 / cap.debuff) { ci = 1 / cap.debuff; hit.push('внутренние дебафы ≤ ÷' + cap.debuff); }
+    if (cap.extBuff && ce > cap.extBuff) { ce = cap.extBuff; hit.push('внешний бафф ≤ ×' + cap.extBuff); }
+    var f = ci * ce;
+    if (cap.buffTotal && f > cap.buffTotal) { f = cap.buffTotal; hit.push('всего ≤ ×' + cap.buffTotal); }
+    if (cap.debuffTotal && f < 1 / cap.debuffTotal) { f = 1 / cap.debuffTotal; hit.push('всего ≤ ÷' + cap.debuffTotal); }
+    return { factor: f, hit: hit };
+  }
+  /** Цепочка множителя (сила атрибута и т. п.) с лимитом статусов: value и formula пересчитываются. */
+  function capChain(cn, cap) {
+    var lf = layerFactors(cn), r = statusCap(lf.internal, lf.external, cap);
+    cn.capped = r.hit.length ? { hit: r.hit, before: cn.value, factorBefore: lf.internal * lf.external } : null;
+    if (r.hit.length) {
+      cn.value = cn.base * r.factor; cn.factor = r.factor;
+      cn.formula += ' → лимит статусов (' + r.hit.join(', ') + '): ' + n(cn.base) + ' × ' + n(r.factor, 3) + ' = ' + n(cn.value, 1);
+    }
+    return cn;
+  }
   function appliesTo(b, stat) {
     if (b.stat === stat) return true;
     if (b.stat === 'all' && stat !== 'stamina') return true;
@@ -190,7 +221,7 @@
     Object.keys(POWER_OF_SOURCE).forEach(function (src) {
       var k = POWER_OF_SOURCE[src], def = rules.modifiers[k];
       var pb = buffs.filter(function (b) { return b.stat === k && inMode(b, mode, rules) && (b.scope === 'all' || b.scope === 'power'); });
-      pf[k] = chain(def.base, pb, { stacking: stacking }).value / def.base;
+      pf[k] = capChain(chain(def.base, pb, { stacking: stacking }), (rules.statusCaps || {})[k]).value / def.base;
     });
     buffs = buffs.map(function (b) {
       var k = POWER_OF_SOURCE[b.source];
@@ -250,7 +281,7 @@
     var mods = {};
     ['attrPower', 'artPower'].forEach(function (k) {
       var def = rules.modifiers[k], m = { key: k, label: def.label, unit: def.unit, base: def.base, scopes: {} };
-      Object.keys(rules.scopes).forEach(function (sc) { m.scopes[sc] = chain(def.base, modBuffs(k, sc), { stacking: stacking }); });
+      Object.keys(rules.scopes).forEach(function (sc) { m.scopes[sc] = capChain(chain(def.base, modBuffs(k, sc), { stacking: stacking }), (rules.statusCaps || {})[k]); });
       m.value = m.scopes.all.value;
       mods[k] = m;
     });
@@ -261,8 +292,23 @@
     if (GE.durabilityPunchMultiplier && S('punch') * dur.punchMultiplier > durMin) durPM = GE.durabilityPunchMultiplier;
     var durRaw = S('punch') * durPM * dur.punchMultiplier, durBase = Math.max(durMin, durRaw);
     var durChain = chain(durBase, modBuffs('durability', 'all'), { stacking: stacking });
-    d.durability = { value: durChain.value, base: durBase, min: durMin, chain: durChain,
-      formula: n(S('punch'), 1) + (durPM !== 1 ? ' × ' + durPM + ' (' + gift.label.toLowerCase() + ')' : '') + ' × ' + dur.punchMultiplier + ' = ' + n(durRaw, 1) + ' кг' + (durRaw < durMin ? ' → минимум ' + durMin + ' кг' + (GE.durabilityMin ? ' (' + gift.label.toLowerCase() + ')' : '') : '') + (durChain.steps.some(function (s) { return s.factor !== 1; }) ? '; множитель: ' + durChain.formula + ' кг' : '') };
+    /* лимит статусов прочности: считаем от прочности без бафов (база удара с одарённостью × 3),
+       внутренние бафы (через силу удара и множитель прочности) — не больше ×4, внешний — ещё не больше ×1,5 */
+    var DC = (rules.statusCaps || {}).durability, durCap = null;
+    if (DC) {
+      var pc = stats.punch.chain, plf = layerFactors(pc), dlf = layerFactors(durChain);
+      var dOf = function (p) { return Math.max(durMin, p * durPM * dur.punchMultiplier); };
+      var D0 = dOf(stats.punch.base), DInt = dOf(stats.punch.base * plf.internal) * dlf.internal, DAll = dOf(pc.value) * dlf.internal * dlf.external;
+      var rc = statusCap(DInt / D0, DInt ? DAll / DInt : 1, DC);
+      if (rc.hit.length) {
+        var k = (D0 * rc.factor) / DAll, before = durChain.value;
+        durChain.value = before * k;
+        durCap = { hit: rc.hit, before: before, base0: D0, factor: rc.factor };
+      }
+    }
+    d.durability = { value: durChain.value, base: durBase, min: durMin, chain: durChain, capped: durCap,
+      formula: n(S('punch'), 1) + (durPM !== 1 ? ' × ' + durPM + ' (' + gift.label.toLowerCase() + ')' : '') + ' × ' + dur.punchMultiplier + ' = ' + n(durRaw, 1) + ' кг' + (durRaw < durMin ? ' → минимум ' + durMin + ' кг' + (GE.durabilityMin ? ' (' + gift.label.toLowerCase() + ')' : '') : '') + (durChain.steps.some(function (s) { return s.factor !== 1; }) ? '; множитель: ' + durChain.formula + ' кг' : '') +
+      (durCap ? '; лимит статусов (' + durCap.hit.join(', ') + '): ' + n(durCap.base0, 1) + ' кг без бафов × ' + n(durCap.factor, 3) + ' = ' + n(durChain.value, 1) + ' кг (было бы ' + n(durCap.before, 1) + ')' : '') };
     mods.durability = { key: 'durability', label: rules.modifiers.durability.label, unit: 'кг', base: durBase, scopes: { all: durChain }, value: durChain.value };
     d.mods = mods;
     d.powerFactors = pf;
@@ -457,9 +503,10 @@
     function tempSeg(sign, numStr, gap, suffix) {
       var num = parseFloat(String(numStr).replace(',', '.')), cold = sign === '-', U = rules.abilities.upgrade;
       var key = cold ? 'cold' : 'heat', ap = alloc ? alloc[key] || 0 : 0, gain = upgradeGain(key, ap, rules);
-      var value = cold ? -num - gain : num + gain;
+      var value = cold ? -num - gain : num + gain, TC = (rules.statusCaps || {}).temperature, tcap = '';
+      if (TC && value > TC.max) { value = TC.max; tcap = ' → предел ' + TC.max + ' °C'; } else if (TC && value < TC.min) { value = TC.min; tcap = ' → предел ' + TC.min + ' °C'; }
       return { temp: { key: key, num: cold ? -num : num, plus: sign === '+', suffix: gap + suffix, value: value, allocAp: ap, gain: gain,
-        formula: (cold ? '−' + n(num, 2) : n(num, 2)) + (gain ? (cold ? ' − ' : ' + ') + n(gain, 2) + ' (прокачка: ' + n(ap, 0) + ' AP × ' + (cold ? U.coldPerStep : U.heatPerStep) + ' °C / ' + U.stepAp + ' AP)' : '') + ' = ' + n(value, 2) + ' °C' } };
+        formula: (cold ? '−' + n(num, 2) : n(num, 2)) + (gain ? (cold ? ' − ' : ' + ') + n(gain, 2) + ' (прокачка: ' + n(ap, 0) + ' AP × ' + (cold ? U.coldPerStep : U.heatPerStep) + ' °C / ' + U.stepAp + ' AP)' : '') + ' = ' + n(cold ? -num - gain : num + gain, 2) + ' °C' + tcap, capped: !!tcap } };
     }
     var tempRe = /([+\-−–]?)(\d+(?:[.,]\d+)?)(\s*)(°\s?[CС]?|градус[а-яё]*(?:\s+Цельсия)?)/gi;
     function plain(chunk) {
@@ -702,7 +749,7 @@
     pressure: pressure, waterRun: waterRun, reactionCheck: reactionCheck, structureCast: structureCast,
     attributeEndurance: attributeEndurance, staminaRecovery: staminaRecovery, woundsAgainst: woundsAgainst,
     erosion: erosion, martialProgress: martialProgress, apProgress: apProgress,
-    parseAbilityText: parseAbilityText, counterLabels: counterLabels, isUnique: isUnique, UNIQUE_KEYS: UNIQUE_KEYS, personaRules: personaRules, personaPool: personaPool, upgradeGain: upgradeGain, upgradeText: upgradeText, ALLOC_ORDER: ALLOC_ORDER, kmhToMs: kmhToMs, msToKmh: msToKmh, PHYS: PHYS, ALL: ALL
+    parseAbilityText: parseAbilityText, statusCap: statusCap, counterLabels: counterLabels, isUnique: isUnique, UNIQUE_KEYS: UNIQUE_KEYS, personaRules: personaRules, personaPool: personaPool, upgradeGain: upgradeGain, upgradeText: upgradeText, ALLOC_ORDER: ALLOC_ORDER, kmhToMs: kmhToMs, msToKmh: msToKmh, PHYS: PHYS, ALL: ALL
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RPEngine = api;
