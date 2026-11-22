@@ -527,9 +527,13 @@ test('обычная способность рядом прокачиваетс�
   const n0 = persona(5000, 2000)[1]; assert.strictEqual(n0.persona, false); near(n0.upgrade.stepAp, 100, 1e-9);
 });
 section('Лимиты системы статусов');
-test('прочность: внутренние бафы не дальше ×4 (Кенос 3000 → максимум 12 000)', () => {
-  const r = run(kenos([{ stat: 'durability', percent: 300, mode: 'passive', layer: 'internal', source: 'attribute' }, { stat: 'punch', percent: 100, mode: 'passive', layer: 'internal', source: 'trait' }]), 'passive').derived.durability;
-  near(r.value, 12000); assert.ok(r.capped);
+test('прочность: множитель прочности внутренними бафами не дальше ×4 (3000 × 5 → 12 000)', () => {
+  const r = run(kenos([{ stat: 'durability', percent: 100, mode: 'passive', layer: 'internal', source: 'attribute' }, { stat: 'durability', percent: 150, mode: 'passive', layer: 'internal', source: 'trait' }]), 'passive').derived.durability;
+  near(r.value, 12000); assert.ok(r.capped); near(r.capped.before, 15000);
+});
+test('прочность: лимит считается от удара с бафами × 3 (удар ×2 → база 6000, ×5 → 24 000)', () => {
+  const r = run(kenos([{ stat: 'punch', percent: 100, mode: 'passive', layer: 'internal', source: 'trait' }, { stat: 'durability', percent: 400, mode: 'passive', layer: 'internal', source: 'attribute' }]), 'passive').derived.durability;
+  near(r.base, 6000); near(r.value, 24000);
 });
 test('прочность: внешний бафф сверху ещё не больше ×1,5 (12 000 → 18 000)', () => {
   const r = run(kenos([{ stat: 'durability', percent: 400, mode: 'passive', layer: 'internal', source: 'attribute' }, { stat: 'durability', percent: 200, mode: 'passive', layer: 'external', source: 'external' }]), 'passive').derived.durability;

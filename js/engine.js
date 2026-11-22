@@ -292,23 +292,13 @@
     if (GE.durabilityPunchMultiplier && S('punch') * dur.punchMultiplier > durMin) durPM = GE.durabilityPunchMultiplier;
     var durRaw = S('punch') * durPM * dur.punchMultiplier, durBase = Math.max(durMin, durRaw);
     var durChain = chain(durBase, modBuffs('durability', 'all'), { stacking: stacking });
-    /* лимит статусов прочности: считаем от прочности без бафов (база удара с одарённостью × 3),
-       внутренние бафы (через силу удара и множитель прочности) — не больше ×4, внешний — ещё не больше ×1,5 */
-    var DC = (rules.statusCaps || {}).durability, durCap = null;
-    if (DC) {
-      var pc = stats.punch.chain, plf = layerFactors(pc), dlf = layerFactors(durChain);
-      var dOf = function (p) { return Math.max(durMin, p * durPM * dur.punchMultiplier); };
-      var D0 = dOf(stats.punch.base), DInt = dOf(stats.punch.base * plf.internal) * dlf.internal, DAll = dOf(pc.value) * dlf.internal * dlf.external;
-      var rc = statusCap(DInt / D0, DInt ? DAll / DInt : 1, DC);
-      if (rc.hit.length) {
-        var k = (D0 * rc.factor) / DAll, before = durChain.value;
-        durChain.value = before * k;
-        durCap = { hit: rc.hit, before: before, base0: D0, factor: rc.factor };
-      }
-    }
+    /* лимит статусов прочности: от прочности по силе удара (удар с бафами × 3) — множитель прочности
+       внутренними бафами не больше ×4, внешний — ещё не больше ×1,5 */
+    var durBefore = durChain.value;
+    capChain(durChain, (rules.statusCaps || {}).durability);
+    var durCap = durChain.capped ? { hit: durChain.capped.hit, before: durBefore, base0: durBase, factor: durChain.factor } : null;
     d.durability = { value: durChain.value, base: durBase, min: durMin, chain: durChain, capped: durCap,
-      formula: n(S('punch'), 1) + (durPM !== 1 ? ' × ' + durPM + ' (' + gift.label.toLowerCase() + ')' : '') + ' × ' + dur.punchMultiplier + ' = ' + n(durRaw, 1) + ' кг' + (durRaw < durMin ? ' → минимум ' + durMin + ' кг' + (GE.durabilityMin ? ' (' + gift.label.toLowerCase() + ')' : '') : '') + (durChain.steps.some(function (s) { return s.factor !== 1; }) ? '; множитель: ' + durChain.formula + ' кг' : '') +
-      (durCap ? '; лимит статусов (' + durCap.hit.join(', ') + '): ' + n(durCap.base0, 1) + ' кг без бафов × ' + n(durCap.factor, 3) + ' = ' + n(durChain.value, 1) + ' кг (было бы ' + n(durCap.before, 1) + ')' : '') };
+      formula: n(S('punch'), 1) + (durPM !== 1 ? ' × ' + durPM + ' (' + gift.label.toLowerCase() + ')' : '') + ' × ' + dur.punchMultiplier + ' = ' + n(durRaw, 1) + ' кг' + (durRaw < durMin ? ' → минимум ' + durMin + ' кг' + (GE.durabilityMin ? ' (' + gift.label.toLowerCase() + ')' : '') : '') + (durChain.steps.some(function (s) { return s.factor !== 1; }) ? '; множитель: ' + durChain.formula + ' кг' : '') };
     mods.durability = { key: 'durability', label: rules.modifiers.durability.label, unit: 'кг', base: durBase, scopes: { all: durChain }, value: durChain.value };
     d.mods = mods;
     d.powerFactors = pf;
