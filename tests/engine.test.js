@@ -579,6 +579,17 @@ test('форма: находит все прокачиваемые числа и
   d = E.rewriteUpgradable(d, it3[2], 10, 13); assert.ok(d.indexOf('10 → 13 м') !== -1);
   assert.strictEqual(E.rewriteUpgradable('{сила 0.5 → 1}', E.scanUpgradable({ parentId: 'p', description: '{сила 0.5 → 1}' }, RULES)[0], 0.5, 0.5), '{сила 0.5}');
 });
+test('сила атрибута влияет на температуру: бафф ×1,5 → 500 °C = 750 °C; дебафф ÷1,5 → 333,3 °C; холод тоже', () => {
+  const mk = (b) => { const c = kenos([b]); c.abilities = [{ id: 'a', name: 'A', description: 'Жар 500 °C, холод -60 °C', ap: 0 }]; return run(c, 'passive').derived.abilities[0].temps; };
+  const up = mk({ stat: 'attrPower', percent: 50, mode: 'passive', layer: 'internal', source: 'attribute' });
+  near(up[0].value, 750); near(up[1].value, -90);
+  const dn = mk({ stat: 'attrPower', percent: 50, type: 'debuff', mode: 'passive', layer: 'internal' });
+  near(dn[0].value, 500 / 1.5, 1e-6); near(dn[1].value, -40, 1e-6);
+});
+test('температура с силой атрибута всё равно не выше 5000 °C', () => {
+  const c = kenos([{ stat: 'attrPower', percent: 200, mode: 'passive', layer: 'internal', source: 'attribute' }]); c.abilities = [{ id: 'a', name: 'A', description: '2000 °C', ap: 0 }];
+  const t0 = run(c, 'passive').derived.abilities[0].temps[0]; near(t0.value, 5000); assert.ok(t0.capped);
+});
 section('Лимиты системы статусов');
 test('прочность: множитель прочности внутренними бафами не дальше ×4 (3000 × 5 → 12 000)', () => {
   const r = run(kenos([{ stat: 'durability', percent: 100, mode: 'passive', layer: 'internal', source: 'attribute' }, { stat: 'durability', percent: 150, mode: 'passive', layer: 'internal', source: 'trait' }]), 'passive').derived.durability;

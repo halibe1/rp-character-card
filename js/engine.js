@@ -508,10 +508,12 @@
       var num = pnum(numStr), cold = sign === '-', U = rules.abilities.upgrade;
       var cur = num2Str ? (cold ? pnum(num2Str) : (sign2 === '-' ? -pnum(num2Str) : pnum(num2Str))) : num;   // у холода «-50 → -90» и «-50 → 90» — одно и то же
       var key = cold ? 'cold' : 'heat', gain = cur - num, ap = upgradeCost(key, gain, rules);
-      var value = cold ? -num - gain : num + gain, TC = (rules.statusCaps || {}).temperature, tcap = '';
+      // сила атрибута (аспект «мощность») усиливает и температуру: бафф ×1,5 → 500 °C становится 750 °C, дебафф ÷1,5 → 333 °C
+      var raw = cold ? -num - gain : num + gain, PF = power && power.scopes && power.scopes.power ? power.scopes.power.value / power.base : 1;
+      var value = raw * PF, TC = (rules.statusCaps || {}).temperature, tcap = '';
       if (TC && value > TC.max) { value = TC.max; tcap = ' → предел ' + TC.max + ' °C'; } else if (TC && value < TC.min) { value = TC.min; tcap = ' → предел ' + TC.min + ' °C'; }
-      return { temp: { key: key, num: cold ? -num : num, plus: sign === '+', suffix: gap + suffix, value: value, allocAp: ap, cost: ap, gain: gain,
-        formula: (cold ? '−' + n(num, 2) : n(num, 2)) + (gain ? (cold ? ' − ' : ' + ') + n(gain, 2) + ' (прокачка: ' + n(gain, 2) + ' °C ÷ ' + (cold ? U.coldPerStep : U.heatPerStep) + ' °C × ' + U.stepAp + ' AP = ' + n(ap, 0) + ' AP)' : '') + ' = ' + n(cold ? -num - gain : num + gain, 2) + ' °C' + tcap, capped: !!tcap } };
+      return { temp: { key: key, num: cold ? -num : num, plus: sign === '+', suffix: gap + suffix, value: value, raw: raw, power: PF, allocAp: ap, cost: ap, gain: gain,
+        formula: (cold ? '−' + n(num, 2) : n(num, 2)) + (gain ? (cold ? ' − ' : ' + ') + n(gain, 2) + ' (прокачка: ' + n(gain, 2) + ' °C ÷ ' + (cold ? U.coldPerStep : U.heatPerStep) + ' °C × ' + U.stepAp + ' AP = ' + n(ap, 0) + ' AP)' : '') + (PF !== 1 ? (gain ? ' = ' + n(raw, 2) : '') + ' × ' + n(PF, 3) + ' (сила атрибута, мощность)' : '') + ' = ' + n(raw * PF, 2) + ' °C' + tcap, capped: !!tcap } };
     }
     var tempRe = /([+\-−–]?)(\d+(?:[.,]\d+)?)(?:\s*(?:→|->|=>)\s*([+\-−–]?)(\d+(?:[.,]\d+)?))?(\s*)(°\s?[CС]?|градус[а-яё]*(?:\s+Цельсия)?)/gi;
     function plain(chunk) {
