@@ -526,6 +526,59 @@ test('подспособности олицетворения: счётчик 2 
 test('обычная способность рядом прокачивается по-старому (100 AP = +20% дебаффа)', () => {
   const n0 = persona(5000, 2000)[1]; assert.strictEqual(n0.persona, false); near(n0.upgrade.stepAp, 100, 1e-9);
 });
+section('Прокачка «было → стало»: AP считаются сами');
+test('пример с лучами: две метки 50% → 100% в подспособности = 2 × 166,7 AP; из 400 AP свободно 66,7 (= 20%)', () => {
+  const c = clone(KENOS);
+  c.abilities = [
+    { id: 'p', name: 'Зеркало', description: '{сила 1000%} и {скорость 1000%}', ap: 0 },
+    { id: 'k', parentId: 'p', name: 'Лучи', description: 'Сила {сила 50% → 100%} зеркала, скорость {скорость 50% → 100%} зеркала.', ap: 400 }
+  ];
+  const k = run(c, 'base').derived.abilities.find(x => x.id === 'k');
+  near(k.allocTotal, 1000 / 3, 1e-6); near(k.allocFree, 400 - 1000 / 3, 1e-6);
+  near(k.lines[0].k, 1, 1e-9); near(k.lines[0].k0, 0.5, 1e-9);
+  assert.strictEqual(k.upgrades.length, 2);
+});
+test('основная способность: {сила 100% → 160%} = +60% = 200 AP; стрелка «->» тоже работает', () => {
+  const a = upg('{сила 100% -> 160%}', {}, 300);
+  near(a.lines[0].percentNow, 160, 1e-9); near(a.allocTotal, 200, 1e-9); near(a.allocFree, 100, 1e-9);
+});
+test('множитель: {скорость x2 → x2.3} = +30% = 100 AP', () => { near(upg('{скорость x2 → x2.3}', {}, 100).allocTotal, 100, 1e-9); });
+test('бафф/дебафф: {дебафф 40% → 80%} = +40% = 200 AP; эффект на все статы: {дебафф все 20% → 30%} = 200 AP', () => {
+  near(upg('{дебафф 40% → 80%}', {}, 0).allocTotal, 200, 1e-9);
+  near(upg('{дебафф все 20% → 30%}', {}, 0).allocTotal, 200, 1e-9);
+});
+test('все статы: {все 40% → 47,5%} = 100 AP (одна метка, хоть и 4 показателя)', () => {
+  const a = upg('{все 40% → 47,5%}', {}, 100); near(a.allocTotal, 100, 1e-9); near(a.lines[0].percentNow, 47.5, 1e-9);
+});
+test('температура: 500 → 600 °C = 200 AP; холод -50 → -90 °C = 200 AP', () => {
+  const a = upg('Пламя 500 → 600 °C, лёд -50 → -90 °C', {}, 400);
+  near(a.temps[0].value, 600); near(a.temps[1].value, -90); near(a.allocTotal, 400, 1e-9);
+});
+test('расстояние: 10 → 13 м = +30% от начального = 200 AP', () => {
+  const a = upg('Радиус 10 → 13 м', {}, 200); near(a.allocTotal, 200, 1e-9); near(a.segments.find(s => s.scaled).scaled.value, 13, 1e-9);
+});
+test('олицетворение: {сила 100% → 250%} = 1000 AP', () => {
+  const c = clone(KENOS); c.ap = 3000;
+  c.abilities = [{ id: 'o', name: 'O', persona: true, personaAp: 1000, description: '{сила 100% → 250%}' }];
+  const o = run(c, 'base').derived.abilities[0]; near(o.allocTotal, 1000, 1e-9); near(o.allocFree, 1000, 1e-9);
+});
+test('старые вложения AP переводятся в текст: 100 AP в силу → {сила 50% → 80%}', () => {
+  const b = E.migrateAlloc({ id: 'a', description: 'Удар {сила 50%}, жар 500 °C', alloc: { punch: 100, heat: 200 } }, RULES);
+  assert.strictEqual(b.description, 'Удар {сила 50% → 80%}, жар 500 → 600 °C');
+});
+test('форма: находит все прокачиваемые числа и переписывает текст «было → стало»', () => {
+  const a = { id: 'k', parentId: 'p', description: 'Сила {сила 0.5} зеркала, жар 500 °C, радиус 10 м.', pros: ['Враг получает {дебафф 20%}'] };
+  const it = E.scanUpgradable(a, RULES);
+  assert.deepStrictEqual(it.map(x => x.kind + ':' + x.pool), ['tag:punch', 'temp:heat', 'scaled:radius', 'tag:status']);
+  let d = E.rewriteUpgradable(a.description, it[0], 0.5, 1);
+  assert.strictEqual(d, 'Сила {сила 0.5 → 1} зеркала, жар 500 °C, радиус 10 м.');
+  const it2 = E.scanUpgradable(Object.assign({}, a, { description: d }), RULES);
+  near(it2[0].cost, 1000 / 6, 1e-6);
+  d = E.rewriteUpgradable(d, it2[1], 500, 600); assert.ok(d.indexOf('500 → 600 °C') !== -1);
+  const it3 = E.scanUpgradable(Object.assign({}, a, { description: d }), RULES);
+  d = E.rewriteUpgradable(d, it3[2], 10, 13); assert.ok(d.indexOf('10 → 13 м') !== -1);
+  assert.strictEqual(E.rewriteUpgradable('{сила 0.5 → 1}', E.scanUpgradable({ parentId: 'p', description: '{сила 0.5 → 1}' }, RULES)[0], 0.5, 0.5), '{сила 0.5}');
+});
 section('Лимиты системы статусов');
 test('прочность: множитель прочности внутренними бафами не дальше ×4 (3000 × 5 → 12 000)', () => {
   const r = run(kenos([{ stat: 'durability', percent: 100, mode: 'passive', layer: 'internal', source: 'attribute' }, { stat: 'durability', percent: 150, mode: 'passive', layer: 'internal', source: 'trait' }]), 'passive').derived.durability;

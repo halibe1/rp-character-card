@@ -376,6 +376,14 @@
    *   100% при силе атрибута ×3 → 300% (×4). Бафф атрибута ×2 и способность ×2 = ×4; при силе ×3 оба ×4 → ×16.
    * В подспособности: значение = такой же стат родителя × k (сила атрибута уже учтена в родителе).
    */
+  /**
+   * Метка: {слово число} или с прокачкой {слово было → стало}: {сила 50% → 100%}, {сила 0.5 -> 1}, {скорость x2 → x2.5}.
+   * Группы: 1 слово, 2 «x», 3 было, 4 «%», 5 «x», 6 стало, 7 «%».
+   */
+  var ARROW = '(?:→|->|=>|>)';
+  function TAG_RE() { return new RegExp('\\{\\s*([^{}\\d]+?)[\\s:=]+([xх×])?\\s*(\\d+(?:[.,]\\d+)?)\\s*(%)?\\s*(?:' + ARROW + '\\s*([xх×])?\\s*(\\d+(?:[.,]\\d+)?)\\s*(%)?\\s*)?\\}', 'gi'); }
+  function tagMark(m) { return (m[2] || m[5]) ? 'x' : ((m[4] || m[7]) ? '%' : ''); }
+  function pnum(s) { return parseFloat(String(s).replace(',', '.')); }
   /** Слова-метки «на все показатели»: {все 40%}, {all 40%}, {все статы 40%}. */
   var ALL_AFTER = ['все', 'всё', 'all', 'все статы', 'статы', 'на все статы', 'на все', 'всех', 'все показатели'];
   var ALL_WORDS = ['all', 'все', 'всё', 'все статы', 'статы', 'все показатели', 'физа'];
@@ -383,7 +391,7 @@
     var map = {}, eff = {};
     Object.keys(defs).forEach(function (k) { [k].concat(defs[k].aliases || []).forEach(function (al) { map[al.toLowerCase()] = k; }); });
     Object.keys(effects || {}).forEach(function (k) { [k].concat(effects[k].aliases || []).forEach(function (al) { eff[al.toLowerCase()] = k; }); });
-    var re = /\{\s*([^{}\d]+?)[\s:=]+([xх×])?\s*(\d+(?:[.,]\d+)?)\s*(%)?\s*\}/gi, segs = [], last = 0, m;
+    var re = TAG_RE(), segs = [], last = 0, m;
     text = String(text || '');
     while ((m = re.exec(text)) !== null) {
       var nm0 = m[1].trim().toLowerCase(), key = map[nm0], effKind = key ? null : eff[nm0];
@@ -397,15 +405,15 @@
       if (m.index > last) segs.push({ text: text.slice(last, m.index) });
       if (isAll) {
         // «все статы»: метка раскрывается в бафф на сила удара, подъём, скорость и реакцию (прочность не входит)
-        var mk = m[2] ? 'x' : (m[4] ? '%' : ''), nv = parseFloat(m[3].replace(',', '.'));
+        var mk = tagMark(m), nv0 = pnum(m[3]), nv = m[6] ? pnum(m[6]) : nv0;
         (allStats || Object.keys(defs).filter(function (k) { return k !== 'durability'; })).filter(function (k) { return defs[k]; }).forEach(function (k, ix) {
           segs.push({ text: (ix ? ', ' : '') + String(defs[k].label || k).toLowerCase() + ' ' });
-          segs.push({ token: { key: k, effect: '', num: nv, mark: mk, src: m[0], viaAll: true } });
+          segs.push({ token: { key: k, effect: '', num: nv, num0: nv0, mark: mk, src: m[0], viaAll: true, allFirst: ix === 0 } });
         });
         last = re.lastIndex;
         continue;
       }
-      segs.push({ token: { key: effKind ? ((effects[effKind] && effects[effKind].pool) || 'status') : key, effect: effKind || '', effAll: effAll, num: parseFloat(m[3].replace(',', '.')), mark: m[2] ? 'x' : (m[4] ? '%' : ''), src: m[0] } });
+      segs.push({ token: { key: effKind ? ((effects[effKind] && effects[effKind].pool) || 'status') : key, effect: effKind || '', effAll: effAll, num: m[6] ? pnum(m[6]) : pnum(m[3]), num0: pnum(m[3]), mark: tagMark(m), src: m[0] } });
       last = re.lastIndex;
     }
     if (last < text.length) segs.push({ text: text.slice(last) });
@@ -460,7 +468,7 @@
     var ui = 0;
     parseAbilityText(text, defs, rules.abilities.effects, rules.abilities.allStats).forEach(function (s) {
       if (s.token) { add(s.token.viaAll ? 'all' : s.token.effAll ? 'statusAll' : s.token.key === 'unique' ? uniqueKey(ui++) : s.token.key); return; }
-      expandPlain(s.text, dummy, rules, {}).forEach(function (x) { if (x.scaled) add(x.scaled.scope === 'radius' ? 'radius' : 'other'); if (x.temp) add(x.temp.key); });
+      expandPlain(s.text, dummy, rules).forEach(function (x) { if (x.scaled) add(x.scaled.scope === 'radius' ? 'radius' : 'other'); if (x.temp) add(x.temp.key); });
     });
     var order = ALLOC_ORDER;
     return order.filter(function (k) { return keys.indexOf(k) !== -1; });
@@ -480,25 +488,32 @@
     });
     return out;
   }
-  function scaledSeg(numStr, suffix, scope, power, rules, forced, alloc) {
-    var num = parseFloat(String(numStr).replace(',', '.')), sc = power.scopes[scope] ? scope : 'all';
-    var F = power.scopes[sc].value / power.base, D = distFactor(alloc, rules, sc === 'radius' ? 'radius' : 'other'), value = num * D * F;
-    return { scaled: { num: num, suffix: suffix, scope: sc, scopeLabel: rules.scopes[sc].label, F: F, D: D, allocAp: alloc ? alloc[sc === 'radius' ? 'radius' : 'other'] || 0 : 0,
-      valueNoUpgrade: num * F, value: value, forced: !!forced,
-      formula: n(num, 2) + (D !== 1 ? ' × ' + n(D, 3) + ' (прокачка)' : '') + ' × ' + n(F, 3) + ' (сила атрибута, ' + rules.scopes[sc].label.toLowerCase() + ') = ' + n(value, 2) } };
+  /** Стоимость прокачки в AP: прирост (п. п. или °C) ÷ прирост за шаг × шаг. */
+  function upgradeCost(pool, gain, rules) {
+    var U = rules.abilities.upgrade, per = upgradeGain(pool, U.stepAp, rules);
+    return gain > 1e-9 && per ? gain / per * U.stepAp : 0;
   }
-  function expandPlain(text, power, rules, alloc) {
+  function scaledSeg(numStr, suffix, scope, power, rules, forced, num2Str) {
+    var num = pnum(numStr), cur = num2Str ? pnum(num2Str) : num, sc = power.scopes[scope] ? scope : 'all';
+    var F = power.scopes[sc].value / power.base, D = num ? cur / num : 1, value = cur * F, pool = sc === 'radius' ? 'radius' : 'other';
+    var pp = (D - 1) * 100, cost = upgradeCost(pool, pp, rules);
+    return { scaled: { num: num, cur: cur, suffix: suffix, scope: sc, scopeLabel: rules.scopes[sc].label, F: F, D: D, pool: pool, gainPp: pp, allocAp: cost, cost: cost,
+      valueNoUpgrade: num * F, value: value, forced: !!forced,
+      formula: n(num, 2) + (D !== 1 ? ' → ' + n(cur, 2) + ' (прокачка +' + n(pp, 1) + '% от начального, ' + n(cost, 0) + ' AP)' : '') + ' × ' + n(F, 3) + ' (сила атрибута, ' + rules.scopes[sc].label.toLowerCase() + ') = ' + n(value, 2) } };
+  }
+  function expandPlain(text, power, rules) {
     var units = (rules.abilities.scaleUnits || []), out = [];
-    var auto = units.length ? new RegExp('(\\d+(?:[.,]\\d+)?)(\\s*)(' + units.map(function (u) { return u.pattern; }).join('|') + ')(?![а-яёa-z0-9/])', 'gi') : null;
-    function tempSeg(sign, numStr, gap, suffix) {
-      var num = parseFloat(String(numStr).replace(',', '.')), cold = sign === '-', U = rules.abilities.upgrade;
-      var key = cold ? 'cold' : 'heat', ap = alloc ? alloc[key] || 0 : 0, gain = upgradeGain(key, ap, rules);
+    var auto = units.length ? new RegExp('(\\d+(?:[.,]\\d+)?)(?:\\s*(?:→|->|=>)\\s*(\\d+(?:[.,]\\d+)?))?(\\s*)(' + units.map(function (u) { return u.pattern; }).join('|') + ')(?![а-яёa-z0-9/])', 'gi') : null;
+    function tempSeg(sign, numStr, sign2, num2Str, gap, suffix) {
+      var num = pnum(numStr), cold = sign === '-', U = rules.abilities.upgrade;
+      var cur = num2Str ? (cold ? pnum(num2Str) : (sign2 === '-' ? -pnum(num2Str) : pnum(num2Str))) : num;   // у холода «-50 → -90» и «-50 → 90» — одно и то же
+      var key = cold ? 'cold' : 'heat', gain = cur - num, ap = upgradeCost(key, gain, rules);
       var value = cold ? -num - gain : num + gain, TC = (rules.statusCaps || {}).temperature, tcap = '';
       if (TC && value > TC.max) { value = TC.max; tcap = ' → предел ' + TC.max + ' °C'; } else if (TC && value < TC.min) { value = TC.min; tcap = ' → предел ' + TC.min + ' °C'; }
-      return { temp: { key: key, num: cold ? -num : num, plus: sign === '+', suffix: gap + suffix, value: value, allocAp: ap, gain: gain,
-        formula: (cold ? '−' + n(num, 2) : n(num, 2)) + (gain ? (cold ? ' − ' : ' + ') + n(gain, 2) + ' (прокачка: ' + n(ap, 0) + ' AP × ' + (cold ? U.coldPerStep : U.heatPerStep) + ' °C / ' + U.stepAp + ' AP)' : '') + ' = ' + n(cold ? -num - gain : num + gain, 2) + ' °C' + tcap, capped: !!tcap } };
+      return { temp: { key: key, num: cold ? -num : num, plus: sign === '+', suffix: gap + suffix, value: value, allocAp: ap, cost: ap, gain: gain,
+        formula: (cold ? '−' + n(num, 2) : n(num, 2)) + (gain ? (cold ? ' − ' : ' + ') + n(gain, 2) + ' (прокачка: ' + n(gain, 2) + ' °C ÷ ' + (cold ? U.coldPerStep : U.heatPerStep) + ' °C × ' + U.stepAp + ' AP = ' + n(ap, 0) + ' AP)' : '') + ' = ' + n(cold ? -num - gain : num + gain, 2) + ' °C' + tcap, capped: !!tcap } };
     }
-    var tempRe = /([+\-−–]?)(\d+(?:[.,]\d+)?)(\s*)(°\s?[CС]?|градус[а-яё]*(?:\s+Цельсия)?)/gi;
+    var tempRe = /([+\-−–]?)(\d+(?:[.,]\d+)?)(?:\s*(?:→|->|=>)\s*([+\-−–]?)(\d+(?:[.,]\d+)?))?(\s*)(°\s?[CС]?|градус[а-яё]*(?:\s+Цельсия)?)/gi;
     function plain(chunk) {
       if (!chunk) return;
       if (/°|градус/i.test(chunk)) {
@@ -507,7 +522,8 @@
           var sg = tm[1] === '−' || tm[1] === '–' ? '-' : tm[1], cut = tm.index;
           if (sg && /\d\s*$/.test(chunk.slice(0, tm.index))) continue;   // диапазон «10–20 °C»: не меняем, это не одна температура
           plainUnits(chunk.slice(tl, cut));
-          out.push(tempSeg(sg, tm[2], tm[3], tm[4]));
+          var sg2 = tm[3] === '−' || tm[3] === '–' ? '-' : tm[3];
+          out.push(tempSeg(sg, tm[2], sg2, tm[4], tm[5], tm[6]));
           tl = tempRe.lastIndex;
         }
         plainUnits(chunk.slice(tl));
@@ -521,9 +537,9 @@
       var last = 0, m; auto.lastIndex = 0;
       while ((m = auto.exec(chunk)) !== null) {
         var scope = 'all';
-        units.some(function (u) { if (new RegExp('^(?:' + u.pattern + ')$', 'i').test(m[3])) { scope = u.scope; return true; } return false; });
+        units.some(function (u) { if (new RegExp('^(?:' + u.pattern + ')$', 'i').test(m[4])) { scope = u.scope; return true; } return false; });
         if (m.index > last) out.push({ text: chunk.slice(last, m.index) });
-        out.push(scaledSeg(m[1], m[2] + m[3], scope, power, rules, false, alloc));
+        out.push(scaledSeg(m[1], m[3] + m[4], scope, power, rules, false, m[2]));
         last = auto.lastIndex;
       }
       if (last < chunk.length) out.push({ text: chunk.slice(last) });
@@ -534,8 +550,8 @@
       plain(text.slice(last, m.index));
       if (m[1] === '=') out.push({ fixed: m[3] });
       else {
-        var nm = /^(\d+(?:[.,]\d+)?)([\s\S]*)$/.exec(m[3]);
-        if (nm) { out.push(scaledSeg(nm[1], '', m[2] ? SCOPE_ALIAS[m[2].toLowerCase()] : 'all', power, rules, true, alloc)); if (nm[2]) out.push({ text: nm[2] }); }
+        var nm = /^(\d+(?:[.,]\d+)?)(?:\s*(?:→|->|=>)\s*(\d+(?:[.,]\d+)?))?([\s\S]*)$/.exec(m[3]);
+        if (nm) { out.push(scaledSeg(nm[1], '', m[2] ? SCOPE_ALIAS[m[2].toLowerCase()] : 'all', power, rules, true, nm[2])); if (nm[3]) out.push({ text: nm[3] }); }
         else out.push({ text: m[3] });
       }
       last = re.lastIndex;
@@ -553,6 +569,152 @@
     var pu = rules.abilities.personaUpgrade || rules.abilities.upgrade, d = (num(totalAp, 0) || 0) - (num(gotAt, 0) || 0);
     return d > 0 ? Math.floor(d / pu.stepAp) * pu.stepAp : 0;
   }
+  /**
+   * Старый формат: AP вкладывались в пункты (alloc), прибавка шла каждой метке пункта.
+   * Переводим в текст: {сила 50%} при 100 AP в силу → {сила 50% → 80%}; температура, расстояния — так же.
+   */
+  function fmtNum(x) { return String(Math.round(x * 1000) / 1000); }
+  function migrateAlloc(a, rules) {
+    var al = a && a.alloc, any = al && Object.keys(al).some(function (k) { return parseFloat(al[k]) > 0; });
+    if (!any) return a;
+    var defs = rules.abilities.stats, effects = rules.abilities.effects, child = !!a.parentId, ui = 0;
+    var map = {}, eff = {};
+    Object.keys(defs).forEach(function (k) { [k].concat(defs[k].aliases || []).forEach(function (x) { map[x.toLowerCase()] = k; }); });
+    Object.keys(effects).forEach(function (k) { [k].concat(effects[k].aliases || []).forEach(function (x) { eff[x.toLowerCase()] = k; }); });
+    function g(pool) { var v = parseFloat(al[pool]); return v > 0 ? upgradeGain(pool, v, rules) : 0; }
+    var units = (rules.abilities.scaleUnits || []);
+    var auto = units.length ? new RegExp('(\\d+(?:[.,]\\d+)?)(\\s*)(' + units.map(function (u) { return u.pattern; }).join('|') + ')(?![а-яёa-z0-9/])', 'gi') : null;
+    function scopeOf(u) { var sc = 'all'; units.some(function (x) { if (new RegExp('^(?:' + x.pattern + ')$', 'i').test(u)) { sc = x.scope; return true; } return false; }); return sc; }
+    function plain(t) {
+      t = t.replace(/([+\-−–]?)(\d+(?:[.,]\d+)?)(\s*)(°\s?[CС]?|градус[а-яё]*(?:\s+Цельсия)?)/gi, function (all, sg, num, gap, suf, off, str) {
+        if (sg && /\d\s*$/.test(str.slice(0, off))) return all;
+        var cold = sg === '-' || sg === '−' || sg === '–', gn = g(cold ? 'cold' : 'heat'); if (!gn) return all;
+        var v = pnum(num) + gn; return sg + num + ' → ' + (cold ? '-' : '') + fmtNum(v) + gap + suf;
+      });
+      if (auto) t = t.replace(auto, function (all, num, gap, u) {
+        var pool = scopeOf(u) === 'radius' ? 'radius' : 'other', gn = g(pool); if (!gn) return all;
+        return num + ' → ' + fmtNum(pnum(num) * (1 + gn / 100)) + gap + u;
+      });
+      return t;
+    }
+    function one(text) {
+      text = String(text == null ? '' : text);
+      var out = '', last = 0, re = /\{[^{}]*\}/g, m;
+      while ((m = re.exec(text)) !== null) {
+        out += plain(text.slice(last, m.index));
+        var tag = m[0], tm = TAG_RE().exec(tag), fm = /^\{~\s*((?:radius|power|speed|all|радиус|мощность|скорость|все)\s+)?(\d+(?:[.,]\d+)?)([\s\S]*)\}$/i.exec(tag);
+        if (tm && !tm[6]) {
+          var nm0 = tm[1].trim().toLowerCase(), key = map[nm0], ek = key ? null : eff[nm0], effAll = false, pw = nm0.split(/\s+/);
+          if (!key && !ek && pw.length > 1 && eff[pw[0]] && ALL_AFTER.indexOf(pw.slice(1).join(' ')) !== -1) { ek = eff[pw[0]]; effAll = true; }
+          var isAll = !key && !ek && ALL_WORDS.indexOf(nm0) !== -1, pool = null;
+          if (ek) { pool = effAll ? 'statusAll' : (effects[ek].pool || 'status'); if (pool === 'unique') pool = uniqueKey(ui++); }
+          else if (isAll) pool = 'all'; else if (key) pool = key;
+          var gn = pool ? g(pool) : 0, mk = tagMark(tm), nv = pnum(tm[3]);
+          if (gn) {
+            var cur = mk === 'x' ? nv + gn / 100 : (child && !ek && mk !== '%') ? nv + gn / 100 : nv + gn;
+            var sfx = mk === '%' ? '%' : '', pre = mk === 'x' ? 'x' : '';
+            tag = '{' + tm[1].trim() + ' ' + pre + tm[3] + sfx + ' → ' + pre + fmtNum(cur) + sfx + '}';
+          }
+        } else if (fm && !/→|->|=>/.test(fm[3])) {
+          var gf = g('other'); if (gf) tag = '{~ ' + (fm[1] || '') + fm[2] + ' → ' + fmtNum(pnum(fm[2]) * (1 + gf / 100)) + fm[3].replace(/\s+$/, '') + '}';
+        }
+        out += tag; last = re.lastIndex;
+      }
+      return out + plain(text.slice(last));
+    }
+    var b = Object.assign({}, a, { alloc: {} });
+    b.description = one(a.description);
+    b.pros = (a.pros || []).map(one); b.cons = (a.cons || []).map(one);
+    return b;
+  }
+  /**
+   * Для формы: все прокачиваемые числа способности по порядку (описание, плюсы, минусы) с позициями в тексте,
+   * чтобы поля «было / стало» могли переписать текст. Чистая функция, без DOM.
+   *   item: { field, start, end, kind: tag|temp|scaled|forced, label, context, pool, unit, from, to, gain, cost, ... }
+   */
+  function scanUpgradable(a, rules) {
+    var defs = rules.abilities.stats, effects = rules.abilities.effects, child = !!a.parentId, out = [];
+    var map = {}, eff = {};
+    Object.keys(defs).forEach(function (k) { [k].concat(defs[k].aliases || []).forEach(function (x) { map[x.toLowerCase()] = k; }); });
+    Object.keys(effects).forEach(function (k) { [k].concat(effects[k].aliases || []).forEach(function (x) { eff[x.toLowerCase()] = k; }); });
+    var units = (rules.abilities.scaleUnits || []);
+    var unitRe = units.length ? '(' + units.map(function (u) { return u.pattern; }).join('|') + ')(?![а-яёa-z0-9/])' : null;
+    function scopeOf(u) { var sc = 'all'; units.some(function (x) { if (new RegExp('^(?:' + x.pattern + ')$', 'i').test(u)) { sc = x.scope; return true; } return false; }); return sc; }
+    function ctx(text, s, e) {
+      var after = text.slice(e).replace(/^[\s,.:;—-]+/, '').split(/[.\n;{]/)[0].trim(), before = text.slice(0, s).split(/[.\n;}]/).pop().trim();
+      var c = after || before; return c.length > 40 ? c.slice(0, 39) + '…' : c;
+    }
+    function fin(it, text) {
+      it.context = ctx(text, it.start, it.end);
+      var gp;
+      if (it.kind === 'tag') gp = it.mark === 'x' || (it.mark === '' && it.childMul) ? (it.to - it.from) * 100 : it.to - it.from;
+      else if (it.kind === 'temp') gp = it.pool === 'cold' ? Math.abs(it.to) - Math.abs(it.from) : it.to - it.from;
+      else gp = it.from ? (it.to / it.from - 1) * 100 : 0;
+      it.gain = gp; it.cost = upgradeCost(it.pool, gp, rules);
+      out.push(it);
+    }
+    function plain(field, text, s0, e0) {
+      var seg = text.slice(s0, e0), taken = [];
+      var tr = /([+\-−–]?)(\d+(?:[.,]\d+)?)(?:\s*(?:→|->|=>)\s*([+\-−–]?)(\d+(?:[.,]\d+)?))?(\s*)(°\s?[CС]?|градус[а-яё]*(?:\s+Цельсия)?)/gi, m;
+      while ((m = tr.exec(seg)) !== null) {
+        if (m[1] && /\d\s*$/.test(seg.slice(0, m.index))) continue;
+        var cold = m[1] === '-' || m[1] === '−' || m[1] === '–', f0 = pnum(m[2]), t0 = m[4] ? pnum(m[4]) : f0;
+        taken.push([m.index, tr.lastIndex]);
+        fin({ field: field, start: s0 + m.index, end: s0 + tr.lastIndex, kind: 'temp', pool: cold ? 'cold' : 'heat', label: cold ? 'Охлаждение' : 'Нагрев', unit: '°C',
+          from: cold ? -f0 : f0, to: cold ? -Math.abs(t0) : (m[3] === '-' || m[3] === '−' || m[3] === '–' ? -t0 : t0), sign: m[1], gap: m[5], suffix: m[6] }, text);
+      }
+      if (!unitRe) return;
+      var ur = new RegExp('(\\d+(?:[.,]\\d+)?)(?:\\s*(?:→|->|=>)\\s*(\\d+(?:[.,]\\d+)?))?(\\s*)' + unitRe, 'gi');
+      while ((m = ur.exec(seg)) !== null) {
+        var st = m.index, en = ur.lastIndex;
+        if (taken.some(function (t) { return st < t[1] && en > t[0]; })) continue;
+        var sc = scopeOf(m[4]), f1 = pnum(m[1]);
+        fin({ field: field, start: s0 + st, end: s0 + en, kind: 'scaled', pool: sc === 'radius' ? 'radius' : 'other', label: sc === 'radius' ? 'Радиус / дальность' : sc === 'speed' ? 'Скорость (число)' : sc === 'power' ? 'Масса / сила (число)' : 'Число',
+          unit: m[4], from: f1, to: m[2] ? pnum(m[2]) : f1, gap: m[3] }, text);
+      }
+    }
+    function scan(field, text) {
+      text = String(text == null ? '' : text);
+      var re = /\{[^{}]*\}/g, last = 0, m;
+      while ((m = re.exec(text)) !== null) {
+        plain(field, text, last, m.index);
+        last = re.lastIndex;
+        var tag = m[0], tm = TAG_RE().exec(tag);
+        if (tm && tm.index === 0 && tm[0].length === tag.length) {
+          var nm0 = tm[1].trim().toLowerCase(), key = map[nm0], ek = key ? null : eff[nm0], effAll = false, pw = nm0.split(/\s+/);
+          if (!key && !ek && pw.length > 1 && eff[pw[0]] && ALL_AFTER.indexOf(pw.slice(1).join(' ')) !== -1) { ek = eff[pw[0]]; effAll = true; }
+          var isAll = !key && !ek && ALL_WORDS.indexOf(nm0) !== -1;
+          if (!key && !ek && !isAll) continue;
+          var pool = ek ? (effAll ? 'statusAll' : (effects[ek].pool || 'status')) : isAll ? 'all' : key;
+          var label = ek ? effects[ek].label + (effAll ? ' (все статы)' : '') : isAll ? 'Все статы' : defs[key].label;
+          var mk = tagMark(tm), f2 = pnum(tm[3]);
+          fin({ field: field, start: m.index, end: re.lastIndex, kind: 'tag', pool: pool, label: label, name: tm[1].trim(), mark: mk, childMul: child && !ek,
+            unit: mk === 'x' || (mk === '' && child && !ek) ? '×' : '%', from: f2, to: tm[6] ? pnum(tm[6]) : f2 }, text);
+          continue;
+        }
+        var fm = /^\{~\s*((?:radius|power|speed|all|радиус|мощность|скорость|все)\s+)?(\d+(?:[.,]\d+)?)(?:\s*(?:→|->|=>)\s*(\d+(?:[.,]\d+)?))?([\s\S]*)\}$/i.exec(tag);
+        if (fm) { var f3 = pnum(fm[2]); fin({ field: field, start: m.index, end: re.lastIndex, kind: 'forced', pool: 'other', label: 'Число', unit: fm[4].trim(), scopeWord: fm[1] || '', rest: fm[4], from: f3, to: fm[3] ? pnum(fm[3]) : f3 }, text); }
+      }
+      plain(field, text, last, text.length);
+    }
+    scan('description', a.description);
+    (a.pros || []).forEach(function (t, i) { scan('pros.' + i, t); });
+    (a.cons || []).forEach(function (t, i) { scan('cons.' + i, t); });
+    return out;
+  }
+  /** Текст с новыми «было / стало» для одного найденного числа. */
+  function rewriteUpgradable(text, it, from, to) {
+    var f = fmtNum(from), t = fmtNum(to), same = Math.abs(from - to) < 1e-9, s;
+    if (it.kind === 'tag') {
+      var pre = it.mark === 'x' ? 'x' : '', sfx = it.mark === '%' ? '%' : '';
+      s = '{' + it.name + ' ' + pre + f + sfx + (same ? '' : ' → ' + pre + t + sfx) + '}';
+    } else if (it.kind === 'temp') {
+      var cold = it.pool === 'cold', fa = fmtNum(Math.abs(from)), ta = fmtNum(Math.abs(to));
+      s = (cold ? '-' : (it.sign === '+' ? '+' : (from < 0 ? '-' : ''))) + fa + (same ? '' : ' → ' + (cold || to < 0 ? '-' : '') + ta) + it.gap + it.suffix;
+    } else if (it.kind === 'scaled') s = f + (same ? '' : ' → ' + t) + it.gap + it.unit;
+    else s = '{~ ' + it.scopeWord + f + (same ? '' : ' → ' + t) + it.rest + '}';
+    return text.slice(0, it.start) + s + text.slice(it.end);
+  }
   function abilityStats(list, user, power, ap, rules) {
     var baseRules = rules, persRules = personaRules(rules);
     var defs = rules.abilities.stats, items = (list || []).filter(function (a) { return a && a.id; });
@@ -566,17 +728,20 @@
       var persona = a.persona === true && !a.parentId, rules = persona ? persRules : baseRules;
       var parent = a.parentId && a.parentId !== a.id && byId[a.parentId] ? build(byId[a.parentId]) : null;
       var lines = [], U = rules.abilities.upgrade;
+      a = migrateAlloc(a, rules);   // старые данные: вложенные AP → «было → стало» в тексте
       var targets = abilityTargets(a, rules), alloc = {};
-      ALLOC_ORDER.forEach(function (k) { var v = a.alloc ? parseFloat(a.alloc[k]) : 0; alloc[k] = targets.indexOf(k) !== -1 && isFinite(v) && v > 0 ? v : 0; });
-      var temps = [], uix = 0;
+      ALLOC_ORDER.forEach(function (k) { alloc[k] = 0; });
+      var temps = [], uix = 0, upgrades = [];
+      function spend(pool, cost, item) { if (cost > 0) { alloc[pool] = (alloc[pool] || 0) + cost; item.cost = cost; upgrades.push(item); } }
       function segsFor(text) { var raw = parseAbilityText(text, defs, rules.abilities.effects, rules.abilities.allStats).map(function (s) {
         if (!s.token) return s;
         var tk = s.token;
         if (tk.effect) {
-          var ef = rules.abilities.effects[tk.effect], pe = tk.mark === 'x' ? (tk.num - 1) * 100 : tk.num, ep = tk.effAll ? 'statusAll' : (ef.pool || 'status'); if (ep === 'unique') ep = uniqueKey(uix++);
-          var bp = upgradeGain(ep, alloc[ep], rules), pu = pe + bp, uF = isUnique(ep) ? power.scopes.all.value / power.base : 1, pn = pu * uF;
-          var el = { key: isUnique(ep) ? ep : 'status', pool: ep, effAll: !!tk.effAll, kind: 'effect', effect: tk.effect, label: ef.label + (tk.effAll ? ' (все статы)' : ''), unit: '%', src: tk.src, percent: pe, bonusPp: bp, allocAp: alloc[ep], percentUp: pu, factorUp: 1 + pu / 100, power: uF, percentNow: pn, factorNow: 1 + pn / 100, factor: 1 + pe / 100, value: pn,
-            formula: n(pe, 1) + '%' + (bp ? ' + ' + n(bp, 2) + '% (прокачка: ' + n(alloc[ep], 0) + ' AP × ' + (isUnique(ep) ? U.physPercentPerStep : U.statusPercentPerStep) + '%' + (tk.effAll ? ' ÷ ' + rules.abilities.allStats.length + ' (все статы)' : '') + ' / ' + U.stepAp + ' AP)' : '') + (uF !== 1 ? (bp ? ' = ' + n(pu, 1) + '%' : '') + ' × ' + n(uF, 3) + ' (сила атрибута)' : '') + ' = ' + n(pn, 1) + '% (' + (tk.effect === 'debuff' ? '÷' : '×') + n(1 + pn / 100, 2) + ')' };
+          var ef = rules.abilities.effects[tk.effect], pc = function (v) { return tk.mark === 'x' ? (v - 1) * 100 : v; }, pe = pc(tk.num0), ep = tk.effAll ? 'statusAll' : (ef.pool || 'status'); if (ep === 'unique') ep = uniqueKey(uix++);
+          var bp = pc(tk.num) - pe, ecost = upgradeCost(ep, bp, rules), pu = pe + bp, uF = isUnique(ep) ? power.scopes.all.value / power.base : 1, pn = pu * uF;
+          var el = { key: isUnique(ep) ? ep : 'status', pool: ep, effAll: !!tk.effAll, kind: 'effect', effect: tk.effect, label: ef.label + (tk.effAll ? ' (все статы)' : ''), unit: '%', src: tk.src, percent: pe, bonusPp: bp, allocAp: ecost, cost: ecost, percentUp: pu, factorUp: 1 + pu / 100, power: uF, percentNow: pn, factorNow: 1 + pn / 100, factor: 1 + pe / 100, value: pn,
+            formula: n(pe, 1) + '%' + (bp ? ' + ' + n(bp, 2) + '% (прокачка: ' + n(ecost, 0) + ' AP)' : '') + (uF !== 1 ? (bp ? ' = ' + n(pu, 1) + '%' : '') + ' × ' + n(uF, 3) + ' (сила атрибута)' : '') + ' = ' + n(pn, 1) + '% (' + (tk.effect === 'debuff' ? '÷' : '×') + n(1 + pn / 100, 2) + ')' };
+          spend(ep, ecost, { label: el.label, pool: ep, from: n(pe, 1) + '%', to: n(pu, 1) + '%', gain: '+' + n(bp, 1) + '%' });
           lines.push(el);
           return { line: el };
         }
@@ -584,17 +749,19 @@
         if (parent) {
           var pl = parent.lines.filter(function (l) { return l.key === tk.key; })[0];
           if (!pl) return { text: tk.src, missing: true };
-          var k0 = tk.mark === '%' ? tk.num / 100 : tk.num;
-          var bonusPp = upgradeGain(pool, alloc[pool], rules), k = k0 + bonusPp / 100;
-          line.child = true; line.parentName = parent.name; line.k0 = k0; line.k = k; line.bonusPp = bonusPp; line.allocAp = alloc[pool];
+          var kOf = function (v) { return tk.mark === '%' ? v / 100 : v; }, k0 = kOf(tk.num0), k = kOf(tk.num);
+          var bonusPp = (k - k0) * 100, ccost = tk.viaAll && !tk.allFirst ? 0 : upgradeCost(pool, bonusPp, rules);
+          line.child = true; line.parentName = parent.name; line.k0 = k0; line.k = k; line.bonusPp = bonusPp; line.allocAp = ccost;
+          spend(pool, ccost, { label: tk.viaAll ? 'Все статы' : def.label, pool: pool, from: '×' + n(k0, 3), to: '×' + n(k, 3), gain: '+' + n(bonusPp, 1) + '%' });
           line.base = pl.value; line.value = low ? pl.value / k : pl.value * k; line.valueNoUpgrade = low ? pl.value / k0 : pl.value * k0;
-          line.formula = n(pl.value, 1) + (low ? ' ÷ ' : ' × ') + n(k, 3) + (bonusPp ? ' (' + n(k0, 3) + ' + ' + n(bonusPp, 2) + '% прокачки)' : '') + ' (от «' + parent.name + '») = ' + n(line.value, 1) + ' ' + def.unit;
+          line.formula = n(pl.value, 1) + (low ? ' ÷ ' : ' × ') + n(k, 3) + (bonusPp ? ' (было ×' + n(k0, 3) + ', прокачка +' + n(bonusPp, 2) + '%)' : '') + ' (от «' + parent.name + '») = ' + n(line.value, 1) + ' ' + def.unit;
         } else {
-          var pct = tk.mark === 'x' ? (tk.num - 1) * 100 : tk.num;
+          var pcOf = function (v) { return tk.mark === 'x' ? (v - 1) * 100 : v; }, pct = pcOf(tk.num0);
           var F = power.scopes[def.scope].value / power.base;
-          var bonusPp = upgradeGain(pool, alloc[pool], rules), pctNow = pct + bonusPp;
+          var bonusPp = pcOf(tk.num) - pct, pctNow = pct + bonusPp, scost = tk.viaAll && !tk.allFirst ? 0 : upgradeCost(pool, bonusPp, rules);
           line.percent = pct; line.factor = 1 + pct / 100; line.power = F;
-          line.bonusPp = bonusPp; line.allocAp = alloc[pool]; line.percentNow = pctNow; line.factorNow = 1 + pctNow / 100;
+          line.bonusPp = bonusPp; line.allocAp = scost;
+          spend(pool, scost, { label: tk.viaAll ? 'Все статы' : def.label, pool: pool, from: n(pct, 1) + '%', to: n(pctNow, 1) + '%', gain: '+' + n(bonusPp, 1) + '%' }); line.percentNow = pctNow; line.factorNow = 1 + pctNow / 100;
           line.effPercent = pctNow * F; line.effFactor = 1 + line.effPercent / 100;
           var ub = user[tk.key], dv = function (x) { return low ? ub / x : ub * x; };
           line.base = ub; line.value = dv(line.effFactor); line.valuePlain = dv(line.factorNow);
@@ -605,7 +772,11 @@
         lines.push(line);
         return { line: line };
       });
-      return [].concat.apply([], raw.map(function (s) { return s.text !== undefined && !s.missing ? expandPlain(s.text, power, rules, alloc) : [s]; })).map(function (x) { if (x.temp) temps.push(x.temp); return x; }); }
+      return [].concat.apply([], raw.map(function (s) { return s.text !== undefined && !s.missing ? expandPlain(s.text, power, rules) : [s]; })).map(function (x) {
+        if (x.temp) { temps.push(x.temp); spend(x.temp.key, x.temp.cost, { label: x.temp.key === 'cold' ? 'Охлаждение' : 'Нагрев', pool: x.temp.key, from: n(x.temp.num, 1) + ' °C', to: n(x.temp.num + (x.temp.key === 'cold' ? -x.temp.gain : x.temp.gain), 1) + ' °C', gain: (x.temp.key === 'cold' ? '−' : '+') + n(Math.abs(x.temp.gain), 1) + ' °C' }); }
+        if (x.scaled) spend(x.scaled.pool, x.scaled.cost, { label: x.scaled.pool === 'radius' ? 'Радиус / дальность' : 'Число', pool: x.scaled.pool, from: n(x.scaled.num, 2) + x.scaled.suffix, to: n(x.scaled.cur, 2) + x.scaled.suffix, gain: '+' + n(x.scaled.gainPp, 1) + '%' });
+        return x;
+      }); }
       var segments = segsFor(a.description);
       var strs = function (v) { return (Array.isArray(v) ? v : []).map(function (x) { return String(x == null ? '' : x).trim(); }).filter(Boolean); };
       var prosSegs = strs(a.pros).map(segsFor), consSegs = strs(a.cons).map(segsFor);
@@ -615,7 +786,7 @@
         images: (Array.isArray(a.images) ? a.images : []).filter(function (u) { return typeof u === 'string' && /^(data:image\/|https:\/\/)/.test(u); }).slice(0, rules.abilities.maxImages || 6) };
       var total = 0; Object.keys(alloc).forEach(function (k) { total += alloc[k]; });
       res.counterLabels = counterLabels(a, rules);
-      res.alloc = alloc; res.targets = targets; res.allocTotal = total; res.allocFree = res.ap - total; res.upgradeSteps = Math.floor(res.ap / U.stepAp);
+      res.alloc = alloc; res.targets = targets; res.allocTotal = total; res.upgrades = upgrades; res.allocFree = res.ap - total; res.upgradeSteps = Math.floor(res.ap / U.stepAp);
       res.entryEff = res.entry === null ? null : fixed ? res.entry : reduceCost(res.entry, ap, rules);
       res.upkeepEff = res.upkeep === null ? null : fixed ? res.upkeep : reduceCost(res.upkeep, ap, rules);
       busy[a.id] = false; done[a.id] = res;
@@ -739,7 +910,7 @@
     pressure: pressure, waterRun: waterRun, reactionCheck: reactionCheck, structureCast: structureCast,
     attributeEndurance: attributeEndurance, staminaRecovery: staminaRecovery, woundsAgainst: woundsAgainst,
     erosion: erosion, martialProgress: martialProgress, apProgress: apProgress,
-    parseAbilityText: parseAbilityText, statusCap: statusCap, counterLabels: counterLabels, isUnique: isUnique, UNIQUE_KEYS: UNIQUE_KEYS, personaRules: personaRules, personaPool: personaPool, upgradeGain: upgradeGain, upgradeText: upgradeText, ALLOC_ORDER: ALLOC_ORDER, kmhToMs: kmhToMs, msToKmh: msToKmh, PHYS: PHYS, ALL: ALL
+    parseAbilityText: parseAbilityText, scanUpgradable: scanUpgradable, rewriteUpgradable: rewriteUpgradable, migrateAlloc: migrateAlloc, upgradeCost: upgradeCost, TAG_RE: TAG_RE, statusCap: statusCap, counterLabels: counterLabels, isUnique: isUnique, UNIQUE_KEYS: UNIQUE_KEYS, personaRules: personaRules, personaPool: personaPool, upgradeGain: upgradeGain, upgradeText: upgradeText, ALLOC_ORDER: ALLOC_ORDER, kmhToMs: kmhToMs, msToKmh: msToKmh, PHYS: PHYS, ALL: ALL
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RPEngine = api;

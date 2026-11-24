@@ -628,9 +628,22 @@
     return !!(navigator.deviceMemory && navigator.deviceMemory <= 2);
   }
   if (liteOn()) document.documentElement.classList.add('lite');
+  /** Вкладки формы: общая информация, способности, бафы и дебафы. */
+  var edTab = 'general';
+  function showEdTab() {
+    $$('#editorBody .ed-grid > section').forEach(function (sec) { sec.hidden = (sec.getAttribute('data-etab') || 'general') !== edTab; });
+    $$('#edTabs [data-etab]').forEach(function (b) {
+      b.setAttribute('aria-selected', b.getAttribute('data-etab') === edTab ? 'true' : 'false');
+      var c = b.querySelector('.cnt'); if (!c || !draft) return;
+      var nb = {}; (draft.buffs || []).forEach(function (x) { nb[x.group || x.id] = 1; });
+      c.textContent = b.getAttribute('data-etab') === 'abilities' ? (draft.abilities || []).length : Object.keys(nb).length;
+    });
+  }
+  function setEdTab(t) { edTab = t; showEdTab(); $('#editorBody').scrollTop = 0; }
   function openEditor(isNew) {
     editingNew = !!isNew;
     draft = isNew ? blankCharacter() : clone(ch);
+    edTab = 'general';
     $('#editorTitle').textContent = isNew ? 'Новый персонаж' : 'Персонаж · ' + (ch.name || '');
     $('#btnDelete').hidden = isNew;
     var noDel = Remote ? !ch.ownerId : chars.length <= 1;
@@ -668,47 +681,32 @@ function abPool(a) {
   var pool = pers ? E.personaPool(draft ? draft.ap : 0, a.personaAp, RULES) : parseFloat(a.ap) || 0;
   return { persona: pers, rules: R, U: U, pool: pool, sub: Math.max(0, Math.floor(parseFloat(a.subCount) || 0)) * U.stepAp };
 }
-function allocLabel(a, k) {
-  var c = E.isUnique(k) && E.counterLabels(a, RULES)[k];
-  return ALLOC_LABEL[k] + (c ? ' «' + c + '»' : '');
-}
-/** Единица ввода у олицетворения: распределяют не AP, а сам прирост (% или °C). */
-function allocUnit(k) { return k === 'heat' ? '°C' : k === 'cold' ? '−°C' : '%'; }
+function upgItems(a) { return E.scanUpgradable(a, abPool(a).rules); }
+/** Итог прокачки в форме: сколько AP ушло (считается из «было → стало»), сколько свободно. */
 function allocHint(a) {
-  var P = abPool(a), U = P.U, ap = P.pool, al = normAlloc(a.alloc), tg = E.abilityTargets(a, RULES), tot = 0, parts = [];
-  var kids = P.sub;
-  tg.forEach(function (k) { tot += al[k]; });
-  tg.forEach(function (k) {
-    if (!al[k]) return;
-    parts.push(allocLabel(a, k).toLowerCase() + ' ' + E.upgradeText(k, al[k], P.rules));
-  });
-  if (P.persona) {
-    var st = U.stepAp, steps = ap / st, used = (tot + kids) / st, left = steps - used, eps = 1e-6;
-    var eq = function (x) { return '+' + fmt(x * U.physPercentPerStep, 1) + '% к стату или счётчику, или +' + fmt(x * U.statusPercentPerStep, 1) + '% к баффу / дебаффу, или +' + fmt(x * U.heatPerStep, 0) + ' °C'; };
-    return 'Доступно <b>' + fmt(steps, 0) + ' усил.</b> (' + fmt(ap, 0) + ' AP, по ' + fmt(st, 0) + ' за усиление: +' + U.physPercentPerStep + '% к стату)' + (kids ? ', из них подспособности: ' + fmt(kids / st, 0) : '') + '. ' +
-      (Math.abs(left) < eps ? '<b>Всё распределено.</b>' : left > 0 ? 'Осталось <b>' + fmt(left, 2) + ' усил.</b> = ' + eq(left) + '.' : '<b class="bad">Перебор на ' + fmt(-left, 2) + ' усил.</b> (' + eq(-left).replace(/\+/g, '') + ' лишние).') +
-      (parts.length ? '<br>Сейчас: ' + parts.join(', ') : '');
-  }
-  return 'Вложено ' + fmt(tot + kids, 0) + (kids ? ' (подспособности ' + fmt(kids, 0) + ')' : '') + ' из ' + fmt(ap, 0) + ' AP' + (tot + kids < ap ? ' · свободно ' + fmt(ap - tot - kids, 0) : '') + (tot + kids > ap ? ' · <b class="bad">' + (P.persona ? 'больше, чем набрано после получения' : 'больше, чем AP способности') + '</b>' : '') + (parts.length ? ' — ' + parts.join(', ') : '');
+  var P = abPool(a), U = P.U, items = upgItems(a), spent = 0, parts = [];
+  items.forEach(function (it) { spent += it.cost; if (it.cost > 0) parts.push(esc(it.label.toLowerCase()) + ' ' + (it.kind === 'temp' ? (it.pool === 'cold' ? '−' : '+') + fmt(Math.abs(it.gain), 1) + ' °C' : '+' + fmt(it.gain, 1) + '%') + ' (' + fmt(it.cost, 0) + ' AP)'); });
+  var used = spent + P.sub, left = P.pool - used, st = U.stepAp, eps = 1e-6;
+  var eq = function (x) { var k = x / st; return '+' + fmt(k * U.physPercentPerStep, 1) + '% к стату или счётчику, или +' + fmt(k * U.statusPercentPerStep, 1) + '% к баффу / дебаффу, или +' + fmt(k * U.heatPerStep, 0) + ' °C'; };
+  return (P.persona ? 'Доступно <b>' + fmt(P.pool, 0) + ' AP</b> (' + fmt(P.pool / st, 0) + ' усил. по ' + fmt(st, 0) + ')' : 'AP способности: <b>' + fmt(P.pool, 0) + '</b>') +
+    ' · вложено <b>' + fmt(used, 1) + '</b>' + (P.sub ? ' (подспособности ' + fmt(P.sub, 0) + ')' : '') + '. ' +
+    (Math.abs(left) < eps ? '<b>Всё распределено.</b>' : left > 0 ? 'Свободно <b>' + fmt(left, 1) + ' AP</b> = ' + eq(left) + '.' : '<b class="bad">Перебор ' + fmt(-left, 1) + ' AP</b> (' + eq(-left).replace(/\+/g, '') + ').') +
+    (parts.length ? '<br>Прокачано: ' + parts.join(', ') : '');
 }
+/** Прокачка: каждое число способности — «было → стало»; сколько это стоит в AP, сайт считает сам. */
 function allocEditor(a, base, i) {
-  var P = abPool(a), U = P.U, tg = E.abilityTargets(a, RULES);
-  if (!tg.length) return '<div class="ab-alloc"><div class="hint">Вкладывать AP пока некуда: в описании нет чисел, которые зависят от статов или меняются от силы атрибута. Добавь метку <code>{speed 910%}</code>, эффект на цель <code>{дебафф 40%}</code>, температуру (<code>500 °C</code>, <code>-100 °C</code>) или число с единицей (<code>10 м</code>, <code>20 кг</code>); числа с замочком <code>{= …}</code> не прокачиваются.</div></div>';
-  var PHYS_K = ['punch', 'lift', 'speed', 'reaction', 'durability', 'all'];
-  var hasPhys = tg.some(function (k) { return PHYS_K.indexOf(k) !== -1 || E.isUnique(k); });
-  var persHint = '<div class="hint">Распредели прирост сам: каждое усиление (' + U.stepAp + ' AP) = <b>+' + U.physPercentPerStep + '%</b> к стату или счётчику — можно делить, например 50% + 50% + 50%; или +' + U.statusPercentPerStep + '% к баффу / дебаффу; или +' + U.heatPerStep + ' °C / −' + U.coldPerStep + ' °C. Пиши прибавку в процентах (или градусах), не в AP.</div>';
-  if (P.persona) return '<div class="ab-alloc">' + persHint + '<div class="row4">' + tg.map(function (k) {
-      var g = E.upgradeGain(k, parseFloat(a.alloc[k]) || 0, P.rules), gv = g ? Math.round(g * 100) / 100 : '';
-      return fld(allocLabel(a, k) + ', ' + allocUnit(k), '<input type="number" data-alloc-u="' + i + '.' + k + '" value="' + gv + '" min="0" step="any" inputmode="decimal">');
-    }).join('') + '</div>' + (hasPhys ? '<div class="row"><button type="button" class="mini-btn" data-spread="' + i + '">⚖ остаток поровну</button></div>' : '') + '<div class="ab-alloc-hint">' + allocHint(a) + '</div></div>';
-  return '<div class="ab-alloc"><div class="hint">AP можно вложить только в то, что есть в описании: показатели из меток и числа, которые меняются от силы атрибута. Каждые ' + U.stepAp + ' AP дают: +' + U.physPercentPerStep + '% к физическому показателю персонажа (баф 100% → ' + fmt(100 + U.physPercentPerStep, 0) + '%); +' + U.statusPercentPerStep + '% к бафу союзника или дебафу врага (<code>{бафф 40%}</code>, <code>{дебафф 40%}</code>); уникальный счётчик без статов (<code>{счётчик 100%}</code>): +' + U.physPercentPerStep + '%; если эффект на все статы цели (<code>{дебафф все 40%}</code>), то +' + fmt(U.statusPercentPerStep / RULES.abilities.allStats.length, 2) + '%; +' + U.heatPerStep + ' °C к максимальной температуре огня или −' + U.coldPerStep + ' °C для холода (<code>500 °C</code>, <code>-100 °C</code>); +' + U.distancePercentPerStep + '% к начальному числу (радиус, дальность). Можно делить: ' + fmt(U.stepAp / 4, 0) + ' AP на 4 показателя = +' + fmt(U.physPercentPerStep / 4, 1) + '% каждому.</div>' +
-    '<div class="row4">' + tg.map(function (k) {
-      if (!P.persona) return fld(allocLabel(a, k) + ', AP', inp(base + 'alloc.' + k, a.alloc[k] || '', 'number', ' min="0" step="' + (U.stepAp / 4) + '"'));
-      var g = E.upgradeGain(k, parseFloat(a.alloc[k]) || 0, P.rules), gv = g ? Math.round(g * 100) / 100 : '';
-      return fld(allocLabel(a, k) + ', ' + allocUnit(k), '<input type="number" data-alloc-u="' + i + '.' + k + '" value="' + gv + '" min="0" step="any" inputmode="decimal">');
-    }).join('') + '</div>' +
-    (hasPhys ? '<div class="row"><button type="button" class="mini-btn" data-spread="' + i + '" title="Раскидать свободные AP поровну на показатели из описания">⚖ свободные AP поровну на показатели</button></div>' : '') +
-    '<div class="ab-alloc-hint">' + allocHint(a) + '</div></div>';
+  var P = abPool(a), U = P.U, items = upgItems(a);
+  var head = '<div class="hint">Меняй <b>«стало»</b> — сайт сам посчитает, сколько AP на это ушло. За ' + U.stepAp + ' AP: +' + U.physPercentPerStep + '% к стату или счётчику, +' + U.statusPercentPerStep + '% к баффу / дебаффу, +' + U.heatPerStep + ' °C / −' + U.coldPerStep + ' °C, +' + U.distancePercentPerStep + '% к расстоянию от начального.' + (a.parentId ? ' В подспособности число — доля от стата родителя (0,5 = половина).' : '') + '</div>';
+  if (!items.length) return '<div class="ab-alloc">' + head + '<div class="hint">В описании нет чисел для прокачки: добавь метку <code>{сила 50%}</code>, эффект <code>{дебафф 40%}</code>, температуру <code>500 °C</code> или расстояние <code>10 м</code>.</div><div class="ab-alloc-hint">' + allocHint(a) + '</div></div>';
+  var rows = items.map(function (it, j) {
+    var u = it.kind === 'tag' ? it.unit : it.kind === 'temp' ? '°C' : esc(it.unit);
+    var g = Math.abs(it.gain) < 1e-9 ? '<span class="hint">не прокачано</span>' : it.gain < 0 ? '<b class="bad">ниже исходного</b>' : (it.kind === 'temp' ? (it.pool === 'cold' ? '−' : '+') + fmt(Math.abs(it.gain), 1) + ' °C' : '+' + fmt(it.gain, 1) + '%') + ' = <b>' + fmt(it.cost, 1) + ' AP</b>';
+    var inp2 = function (which, v) { return '<input type="number" step="any" inputmode="decimal" data-upg="' + i + '.' + j + '.' + which + '" value="' + (Math.round(v * 1000) / 1000) + '" aria-label="' + (which === 'from' ? 'было' : 'стало') + '">'; };
+    return '<div class="upg-ed-row' + (it.cost > 0 ? ' on' : '') + '"><div class="ul"><b>' + esc(it.label) + '</b>' + (it.context ? '<small>' + esc(it.context) + '</small>' : '') + '</div>' +
+      '<label class="uv"><small>было</small>' + inp2('from', it.from) + '<i>' + u + '</i></label><span class="ua">→</span>' +
+      '<label class="uv to"><small>стало</small>' + inp2('to', it.to) + '<i>' + u + '</i></label><div class="uc">' + g + '</div></div>';
+  }).join('');
+  return '<div class="ab-alloc">' + head + '<div class="upg-ed">' + rows + '</div><div class="ab-alloc-hint">' + allocHint(a) + '</div></div>';
 }
   function renderEditor() {
     var d = draft, body = $('#editorBody'), keep = body.scrollTop;
@@ -792,7 +790,7 @@ function allocEditor(a, base, i) {
           acc('cost', 'Траты стамины <small>' + (costSum || 'не указаны') + (a.fixedCost ? ' · фиксированные' : '') + '</small>',
             '<div class="row3">' + fld('Призыв, % стамины', inp(base + 'entryCost', a.entryCost, 'number', ' min="0" step="any"')) + fld('Поддержание, %', inp(base + 'upkeepCost', a.upkeepCost, 'number', ' min="0" step="any"')) + fld('Период поддержания', inp(base + 'upkeepNote', a.upkeepNote, 'text', ' placeholder="за пост"')) + '</div>' +
             '<label class="chk"><input type="checkbox" data-f="' + base + 'fixedCost"' + (a.fixedCost ? ' checked' : '') + '> Фиксированные траты <span class="hint">(не снижаются от AP)</span></label>', false) +
-          acc('up', 'Прокачка и AP <small>' + (isPers ? 'получено на ' + fmt(parseFloat(a.personaAp) || 0, 0) + ' AP · доступно ' + fmt(P.pool, 0) : parseFloat(a.ap) ? fmt(parseFloat(a.ap), 0) + ' AP' : 'нет') + (P.sub ? ' · подспособностей ' + fmt(P.sub / P.U.stepAp, 0) : '') + '</small>',
+          acc('up', 'Прокачка и AP <small>' + (function () { var sp = upgItems(a).reduce(function (t, x) { return t + x.cost; }, 0) + P.sub; return (isPers ? 'получено на ' + fmt(parseFloat(a.personaAp) || 0, 0) + ' AP · ' : '') + 'вложено ' + fmt(sp, 0) + ' из ' + fmt(P.pool, 0) + ' AP'; })() + (P.sub ? ' · подспособностей ' + fmt(P.sub / P.U.stepAp, 0) : '') + '</small>',
             '<div class="row">' + (isPers ? fld('Получено на общем AP', inp(base + 'personaAp', a.personaAp, 'number', ' min="0" step="100"')) : fld('AP, вложенные в способность', inp(base + 'ap', a.ap, 'number', ' min="0" step="10"'))) +
             fld('Подспособности от прокачки, шт.', inp(base + 'subCount', a.subCount, 'number', ' min="0" step="1"')) + '</div>' +
             '<div class="hint">' + (isPers ? 'Олицетворение усиливается за каждую полную тысячу общего AP персонажа после получения: сейчас общий AP ' + fmt(parseFloat(d.ap) || 0, 0) + ', значит доступно <b>' + fmt(P.pool, 0) + ' AP</b> (' + fmt(P.pool / P.U.stepAp, 0) + ' усил.). ' : '') +
@@ -859,10 +857,11 @@ function allocEditor(a, base, i) {
           '<button type="button" class="x" data-del="traits.' + i + '" aria-label="Удалить">✕</button></div>';
       }).join('') : '<div class="empty-note">Нет трейтов.</div>') +
       '<button type="button" class="mini-btn add" data-add="traits"' + (RULES.maxTraits && nTraits >= RULES.maxTraits ? ' disabled' : '') + '>' + (RULES.maxTraits && nTraits >= RULES.maxTraits ? 'максимум ' + RULES.maxTraits : '+ трейт') + '</button></section>' +
-      '<section class="ed-sec ed-wide"><h3>Способности атрибута</h3><details class="tag-guide" open><summary>Как писать способность</summary><p>Описание пиши обычным текстом. Числа, которые должны считаться, вставляй <b>меткой в фигурных скобках</b>: <code>{слово число}</code>. Процент можно заменить множителем: <code>{скорость x2}</code> = <code>{скорость 100%}</code>. На экране метка превратится в готовое значение от текущих статов персонажа; сила атрибута усиливает процент.</p><div class="tg"><div class="tg-h">Статы персонажа</div><div class="tg-r"><span>Сила удара</span><span><code>{сила 50%}</code></span><span class="tg-n">+30% за 100 AP</span></div><div class="tg-r"><span>Сила на подъём</span><span><code>{подъём 50%}</code></span><span class="tg-n">+30% за 100 AP</span></div><div class="tg-r"><span>Скорость</span><span><code>{скорость 50%}</code></span><span class="tg-n">+30% за 100 AP</span></div><div class="tg-r"><span>Реакция</span><span><code>{реакция 50%}</code></span><span class="tg-n">+30% за 100 AP, мс делятся</span></div><div class="tg-r"><span>Прочность</span><span><code>{прочность 50%}</code></span><span class="tg-n">+30% за 100 AP</span></div><div class="tg-r"><span>Все статы</span><span><code>{все 50%}</code></span><span class="tg-n">удар, подъём, скорость, реакция; без прочности. +7,5% за 100 AP</span></div><div class="tg-h">Эффекты на других</div><div class="tg-r"><span>Бафф союзнику</span><span><code>{бафф 30%}</code></span><span class="tg-n">+20% за 100 AP</span></div><div class="tg-r"><span>Дебафф врагу</span><span><code>{дебафф 30%}</code></span><span class="tg-n">+20% за 100 AP</span></div><div class="tg-r"><span>Бафф на все статы союзника</span><span><code>{бафф все 20%}</code></span><span class="tg-n">+5% за 100 AP</span></div><div class="tg-r"><span>Дебафф на все статы врага</span><span><code>{дебафф все 20%}</code></span><span class="tg-n">+5% за 100 AP</span></div><div class="tg-h">Особое</div><div class="tg-r"><span>Уникальный счётчик</span><span><code>{счётчик 100%}</code></span><span class="tg-n">множитель без статов; меняется от силы атрибута. +30% за 100 AP</span></div><div class="tg-r"><span>Нагрев</span><span><code>300 °C</code></span><span class="tg-n">без скобок, просто текстом. +50 °C за 100 AP</span></div><div class="tg-r"><span>Охлаждение</span><span><code>-50 °C</code></span><span class="tg-n">без скобок, со знаком минус. −20 °C за 100 AP</span></div><div class="tg-h">Рост чисел</div><div class="tg-r"><span>Число не меняется</span><span><code>{= 10 м}</code> <code>{= 3 поста}</code></span><span class="tg-n">кнопка «🔒 не меняется»</span></div><div class="tg-r"><span>Число растёт без единицы</span><span><code>{~ 15 лучей}</code></span><span class="tg-n">кнопка «⚖ масштабировать»</span></div></div><p><b>Подспособность:</b> число в метке — доля от стата родителя: <code>{сила 0.5}</code> = половина силы родителя. Если подспособность добавлена прокачкой, укажи это в счётчике «Подспособности от прокачки» у родителя: каждая отнимет 100 AP (у олицетворения 1000).</p><p><b>Олицетворение атрибута</b> (галочка у основной способности, одно на персонажа) пишется так же, но прокачивается от общего AP: за каждую полную 1000 AP после получения — одно усиление (стат +150%, бафф или дебафф +100%, нагрев +500 °C, охлаждение −80 °C) или одна подспособность.</p><p><b>Числа с единицами</b> (<code>15 м</code>, <code>20 кг</code>, <code>50 км/ч</code>) растут от силы атрибута сами. Чтобы число не росло, выдели его и нажми «🔒 не меняется».</p><p><b>Траты стамины</b> (если не отмечены как фиксированные) снижаются на 5% от изначальных за каждые 100 AP персонажа: изначально от 10% — не ниже 5%, до 5% — не ниже 0,5%.</p></details>' + abilityRows() + '</section>' +
+      '<section class="ed-sec ed-wide" data-etab="abilities"><h3>Способности атрибута</h3><details class="tag-guide"' + (d.abilities.length ? '' : ' open') + '><summary>Как писать способность</summary><p>Описание пиши обычным текстом. Числа, которые должны считаться, вставляй <b>меткой в фигурных скобках</b>: <code>{слово число}</code>. Процент можно заменить множителем: <code>{скорость x2}</code> = <code>{скорость 100%}</code>. На экране метка превратится в готовое значение от текущих статов персонажа; сила атрибута усиливает процент.</p><div class="tg"><div class="tg-h">Статы персонажа</div><div class="tg-r"><span>Сила удара</span><span><code>{сила 50%}</code></span><span class="tg-n">+30% за 100 AP</span></div><div class="tg-r"><span>Сила на подъём</span><span><code>{подъём 50%}</code></span><span class="tg-n">+30% за 100 AP</span></div><div class="tg-r"><span>Скорость</span><span><code>{скорость 50%}</code></span><span class="tg-n">+30% за 100 AP</span></div><div class="tg-r"><span>Реакция</span><span><code>{реакция 50%}</code></span><span class="tg-n">+30% за 100 AP, мс делятся</span></div><div class="tg-r"><span>Прочность</span><span><code>{прочность 50%}</code></span><span class="tg-n">+30% за 100 AP</span></div><div class="tg-r"><span>Все статы</span><span><code>{все 50%}</code></span><span class="tg-n">удар, подъём, скорость, реакция; без прочности. +7,5% за 100 AP</span></div><div class="tg-h">Эффекты на других</div><div class="tg-r"><span>Бафф союзнику</span><span><code>{бафф 30%}</code></span><span class="tg-n">+20% за 100 AP</span></div><div class="tg-r"><span>Дебафф врагу</span><span><code>{дебафф 30%}</code></span><span class="tg-n">+20% за 100 AP</span></div><div class="tg-r"><span>Бафф на все статы союзника</span><span><code>{бафф все 20%}</code></span><span class="tg-n">+5% за 100 AP</span></div><div class="tg-r"><span>Дебафф на все статы врага</span><span><code>{дебафф все 20%}</code></span><span class="tg-n">+5% за 100 AP</span></div><div class="tg-h">Особое</div><div class="tg-r"><span>Уникальный счётчик</span><span><code>{счётчик 100%}</code></span><span class="tg-n">множитель без статов; меняется от силы атрибута. +30% за 100 AP</span></div><div class="tg-r"><span>Нагрев</span><span><code>300 °C</code></span><span class="tg-n">без скобок, просто текстом. +50 °C за 100 AP</span></div><div class="tg-r"><span>Охлаждение</span><span><code>-50 °C</code></span><span class="tg-n">без скобок, со знаком минус. −20 °C за 100 AP</span></div><div class="tg-h">Рост чисел</div><div class="tg-r"><span>Прокачано (было → стало)</span><span><code>{сила 50% → 80%}</code> <code>500 → 600 °C</code></span><span class="tg-n">удобнее через «Прокачка и AP»: AP посчитаются сами</span></div><div class="tg-r"><span>Число не меняется</span><span><code>{= 10 м}</code> <code>{= 3 поста}</code></span><span class="tg-n">кнопка «🔒 не меняется»</span></div><div class="tg-r"><span>Число растёт без единицы</span><span><code>{~ 15 лучей}</code></span><span class="tg-n">кнопка «⚖ масштабировать»</span></div></div><p><b>Подспособность:</b> число в метке — доля от стата родителя: <code>{сила 0.5}</code> = половина силы родителя. Если подспособность добавлена прокачкой, укажи это в счётчике «Подспособности от прокачки» у родителя: каждая отнимет 100 AP (у олицетворения 1000).</p><p><b>Олицетворение атрибута</b> (галочка у основной способности, одно на персонажа) пишется так же, но прокачивается от общего AP: за каждую полную 1000 AP после получения — одно усиление (стат +150%, бафф или дебафф +100%, нагрев +500 °C, охлаждение −80 °C) или одна подспособность.</p><p><b>Числа с единицами</b> (<code>15 м</code>, <code>20 кг</code>, <code>50 км/ч</code>) растут от силы атрибута сами. Чтобы число не росло, выдели его и нажми «🔒 не меняется».</p><p><b>Траты стамины</b> (если не отмечены как фиксированные) снижаются на 5% от изначальных за каждые 100 AP персонажа: изначально от 10% — не ниже 5%, до 5% — не ниже 0,5%.</p></details>' + abilityRows() + '</section>' +
       // бафы
-      '<section class="ed-sec ed-wide"><h3>Бафы и дебафы</h3><div class="sub">Идут по секторам. Внутри сектора проценты <b>складываются</b> (Режим зверя +50% и Дух зверя +50% = +100%, ×2), сектора <b>перемножаются</b>: <b>Атрибут × Трейты × Стиль × Артефакты × Внешний</b>. Дебафф делит. В каждом секторе добавь эффект, назови его и укажи, что он бафает; «Пассивный» действует всегда, «Активный» — только в режиме «Активные». Артефакты и внешний сектор могут вывести тело за предел.</div>' + buffSectors() + '</section>' +
+      '<section class="ed-sec ed-wide" data-etab="buffs"><h3>Бафы и дебафы</h3><div class="sub">Идут по секторам. Внутри сектора проценты <b>складываются</b> (Режим зверя +50% и Дух зверя +50% = +100%, ×2), сектора <b>перемножаются</b>: <b>Атрибут × Трейты × Стиль × Артефакты × Внешний</b>. Дебафф делит. В каждом секторе добавь эффект, назови его и укажи, что он бафает; «Пассивный» действует всегда, «Активный» — только в режиме «Активные». Артефакты и внешний сектор могут вывести тело за предел.</div>' + buffSectors() + '</section>' +
       '</div>';
+    showEdTab();
     body.scrollTop = keep;
   }
 
@@ -957,7 +956,7 @@ function allocEditor(a, base, i) {
   function saveEditor(e) {
     if (e) e.preventDefault();
     var c = cleanDraft(draft);
-    if (!c.name) { toast('Укажи имя персонажа'); var f = $('#editorBody [data-f="name"]'); if (f) f.focus(); return; }
+    if (!c.name) { toast('Укажи имя персонажа'); setEdTab('general'); var f = $('#editorBody [data-f="name"]'); if (f) f.focus(); return; }
     if (editingNew || !c.id) c.id = makeId(c.name);
     c.updatedAt = Date.now();
     if (!c.createdAt) c.createdAt = Date.now();
@@ -1076,14 +1075,6 @@ function allocEditor(a, base, i) {
     body.addEventListener('input', function (e) {
       var gn = e.target.getAttribute('data-gname');
       if (gn !== null) { draft.buffs.forEach(function (b) { if ((b.group || b.id) === gn) { b.group = gn; b.label = e.target.value; } }); return; }
-      var au = e.target.getAttribute('data-alloc-u');
-      if (au) {
-        var ai = au.split('.'), AA = draft.abilities[+ai[0]], ak = ai[1]; if (!AA) return;
-        var PP = abPool(AA), per = E.upgradeGain(ak, PP.U.stepAp, PP.rules), v = parseFloat(String(e.target.value).replace(',', '.'));
-        AA.alloc = normAlloc(AA.alloc); AA.alloc[ak] = isFinite(v) && v > 0 && per ? Math.round(v / per * PP.U.stepAp * 1e6) / 1e6 : 0;
-        var hh = e.target.closest('.ab-alloc'), hn = hh && hh.querySelector('.ab-alloc-hint'); if (hn) hn.innerHTML = allocHint(AA);
-        return;
-      }
       var p = e.target.getAttribute('data-f');
       if (!p) return;
       setPath(draft, p, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
@@ -1103,6 +1094,17 @@ function allocEditor(a, base, i) {
     body.addEventListener('change', function (e) {
       if (/^(ap|abilities\.\d+\.(description|pros\.\d+|cons\.\d+|persona|personaAp|subCount))$/.test(e.target.getAttribute('data-f') || '')) { renderEditor(); return; }
       if (/^(gift|buffs\.\d+\.(stat|type|percent|enabled))$/.test(e.target.getAttribute('data-f') || '')) { renderEditor(); return; }
+      var ug = e.target.getAttribute('data-upg');
+      if (ug) {
+        var up = ug.split('.'), UA = draft.abilities[+up[0]], its = UA ? upgItems(UA) : [], it = its[+up[1]];
+        if (!it) return;
+        var v = parseFloat(String(e.target.value).replace(',', '.'));
+        var from = up[2] === 'from' ? (isFinite(v) ? v : it.from) : it.from, to = up[2] === 'to' ? (isFinite(v) ? v : from) : (Math.abs(it.to - it.from) < 1e-9 ? from : it.to);
+        var fp = it.field.split('.'), txt = fp.length > 1 ? UA[fp[0]][+fp[1]] : UA[fp[0]];
+        var nt = E.rewriteUpgradable(String(txt || ''), it, from, to);
+        if (fp.length > 1) UA[fp[0]][+fp[1]] = nt; else UA[fp[0]] = nt;
+        renderEditor(); return;
+      }
       if (e.target.id === 'abImgFile' && e.target.files[0] && abImgTarget !== null) {
         var ti = abImgTarget, f = e.target.files[0]; e.target.value = '';
         readAbilityImage(f).then(function (url) { var A = draft.abilities[ti]; if (A) { A.images = (A.images || []).concat(url).slice(0, RULES.abilities.maxImages || 6); renderEditor(); } }).catch(function (er) { toast(er.message); });
@@ -1118,18 +1120,6 @@ function allocEditor(a, base, i) {
       if (apc) { var ap2 = apc.getAttribute('data-add-pc').split('.'); var PA = draft.abilities[+ap2[0]]; PA[ap2[1]] = normList(PA[ap2[1]]).concat(''); renderEditor(); var tas = $$('#editorBody .ab-edit')[+ap2[0]]; return; }
       var dpc = t.closest('[data-del-pc]');
       if (dpc) { var dp2 = dpc.getAttribute('data-del-pc').split('.'); draft.abilities[+dp2[0]][dp2[1]].splice(+dp2[2], 1); renderEditor(); return; }
-      var spr = t.closest('[data-spread]');
-      if (spr) {
-        var SA = draft.abilities[+spr.getAttribute('data-spread')]; if (!SA) return;
-        SA.alloc = normAlloc(SA.alloc);
-        var used = 0; E.abilityTargets(SA, RULES).forEach(function (k) { used += SA.alloc[k]; });
-        var SP = abPool(SA), free = SP.pool - SP.sub - used;
-        if (free <= 0) { toast('Свободных AP нет'); return; }
-        var ph = E.abilityTargets(SA, RULES).filter(function (k) { return ['punch', 'lift', 'speed', 'reaction', 'durability', 'all'].indexOf(k) !== -1 || E.isUnique(k); });
-        if (!ph.length) { toast('В описании нет показателей-меток'); return; }
-        ph.forEach(function (k) { SA.alloc[k] = Math.round((SA.alloc[k] + free / ph.length) * 100) / 100; });
-        renderEditor(); return;
-      }
       var wr = t.closest('[data-wrap]');
       if (wr) {
         var ta = wr.parentNode.parentNode.querySelector('textarea'); if (!ta) return;
@@ -1182,6 +1172,12 @@ function allocEditor(a, base, i) {
       if (e.dataTransfer.files[0]) takeArt(e.dataTransfer.files[0]);
     });
     $('#editorForm').addEventListener('submit', saveEditor);
+    $('#edTabs').addEventListener('click', function (e) { var b = e.target.closest('[data-etab]'); if (b) setEdTab(b.getAttribute('data-etab')); });
+    $('#edTabs').addEventListener('keydown', function (e) {
+      var T = ['general', 'abilities', 'buffs'], x = T.indexOf(edTab);
+      if (e.key === 'ArrowRight') x = (x + 1) % 3; else if (e.key === 'ArrowLeft') x = (x + 2) % 3; else return;
+      setEdTab(T[x]); $('#edTabs [data-etab="' + T[x] + '"]').focus();
+    });
     $('#editor').addEventListener('click', function (e) { if (e.target.closest('[data-eclose]')) askCloseEditor(); });
     // закрытие вкладки, перезагрузка, «Назад» со страницы: браузер сам спросит «Покинуть сайт?»
     window.addEventListener('beforeunload', function (e) { if (!$('#editor').hidden && editorDirty()) { e.preventDefault(); e.returnValue = ''; return ''; } });

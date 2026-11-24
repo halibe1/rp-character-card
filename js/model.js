@@ -43,6 +43,7 @@
   }
   /** Способность атрибута в полном формате (данные могут быть чужими: приводим типы). */
   function normAbility(a) {
+    if (a && a.alloc && E.migrateAlloc) a = E.migrateAlloc(a, a.persona === true && !a.parentId ? E.personaRules(RULES) : RULES);
     return { id: String(a.id || makeBuffId()), name: String(a.name || ''), description: String(a.description || ''), upkeepNote: String(a.upkeepNote || ''),
       parentId: String(a.parentId || ''), fixedCost: a.fixedCost === true, persona: a.persona === true, personaAp: a.personaAp === undefined || a.personaAp === '' ? RULES.abilities.personaUnlockAp || 1000 : a.personaAp, subCount: a.subCount === undefined || a.subCount === '' ? 0 : a.subCount, alloc: normAlloc(a.alloc), pros: normList(a.pros), cons: normList(a.cons), ap: a.ap === undefined || a.ap === '' ? 0 : a.ap,
       entryCost: a.entryCost === undefined ? null : a.entryCost, upkeepCost: a.upkeepCost === undefined ? null : a.upkeepCost,
