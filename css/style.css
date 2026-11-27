@@ -1125,3 +1125,21 @@ body.is-capturing { cursor: progress; }
 .post-h { gap: 8px; flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
 .post-h > span { white-space: nowrap; }
 .post-fold, .post-reset { white-space: nowrap; flex: none; }
+
+/* ---------- профиль (диаграмма статов) ---------- */
+.radar { display: grid; justify-items: center; }
+.radar svg { width: 100%; max-width: 280px; height: auto; overflow: visible; }
+.radar .rg { fill: none; stroke: rgba(168, 85, 247, .18); stroke-width: 1; }
+.radar .rg.one { stroke: rgba(192, 132, 252, .45); stroke-dasharray: 3 3; }
+.radar .ax { stroke: rgba(168, 85, 247, .22); stroke-width: 1; }
+.radar .rl { fill: var(--text-3); font-size: 8px; font-family: var(--f-num); }
+.radar .pb { fill: none; stroke: var(--a4); stroke-width: 1.2; stroke-dasharray: 4 3; opacity: .55; }
+.radar .pc { fill: rgba(168, 85, 247, .32); stroke: var(--a3); stroke-width: 1.6; filter: drop-shadow(0 0 6px rgba(192, 132, 252, .55)); }
+.radar .rp circle { fill: #fff; stroke: var(--a3); stroke-width: 1.2; }
+.radar .rp { cursor: help; }
+.radar .lb { fill: var(--text-2); font-size: 10px; font-weight: 600; }
+.radar .lv { fill: var(--a4); font-size: 9.5px; font-family: var(--f-num); }
+.radar-key { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-3); }
+.radar-key .k { width: 14px; height: 0; border-top: 2px solid var(--a3); margin-left: 8px; }
+.radar-key .k.base { border-top: 2px dashed var(--a4); opacity: .7; }
+.lite .radar .pc { filter: none; }
