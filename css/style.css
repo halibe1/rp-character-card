@@ -1039,7 +1039,7 @@ body.is-capturing { cursor: progress; }
 @media (prefers-reduced-motion: reduce) { .abx.is-persona::before { animation: none; } }
 
 /* ---------- облегчённый режим (слабые телефоны) ---------- */
-.lite *, .lite *::before, .lite *::after { animation: none !important; transition-duration: .01ms !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+.lite *, .lite *::before, .lite *::after { animation: none !important; transition: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 .lite .panel { background: linear-gradient(160deg, rgba(36, 20, 71, .94), rgba(26, 16, 51, .9) 60%); box-shadow: none; }
 .lite .stage-beam, .lite .stage-haze { filter: none; opacity: .55; }
 .lite .modal-backdrop { background: rgba(5, 2, 12, .88); }
@@ -1143,3 +1143,22 @@ body.is-capturing { cursor: progress; }
 .radar-key .k { width: 14px; height: 0; border-top: 2px solid var(--a3); margin-left: 8px; }
 .radar-key .k.base { border-top: 2px dashed var(--a4); opacity: .7; }
 .lite .radar .pc { filter: none; }
+
+/* ---------- оборот CSS-карточки: профиль ---------- */
+.css-card { cursor: pointer; transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
+.css-card.held { animation: none; transform: rotateY(0deg); }
+.css-card.held.flipped { transform: rotateY(180deg); }
+.lite .css-card { transition: transform .6s cubic-bezier(.2, .8, .2, 1) !important; }
+.css-card:focus-visible { outline: 2px solid var(--a3); outline-offset: 6px; }
+.css-back { grid-template-rows: auto 1fr auto; padding: 12% 8% 10%; gap: 4px; }
+.css-back-h { font-family: var(--f-head); font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--a3); text-align: center; }
+.css-radar-box { display: grid; place-items: center; min-height: 0; }
+.css-radar { width: 100%; height: auto; overflow: visible; }
+.css-radar .rg { fill: none; stroke: rgba(168, 85, 247, .25); }
+.css-radar .rg.one { stroke: rgba(192, 132, 252, .55); stroke-dasharray: 3 3; }
+.css-radar .ax { stroke: rgba(168, 85, 247, .3); }
+.css-radar .pb { fill: none; stroke: var(--a4); stroke-width: 1.2; stroke-dasharray: 4 3; opacity: .6; }
+.css-radar .pc { fill: rgba(168, 85, 247, .38); stroke: #d8b4fe; stroke-width: 1.8; }
+.css-radar .lb { fill: var(--a4); font-size: 10px; font-weight: 700; }
+.css-radar .lv { fill: #d8b4fe; font-size: 9.5px; font-family: var(--f-num); }
+.css-back .css-name { font-size: 15px; }

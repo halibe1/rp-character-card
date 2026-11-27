@@ -158,6 +158,49 @@
     g.restore();
   }
 
+  /**
+   * Профиль на обороте карточки. data: { axes: [{ label, f, fb, txt }], rings: [{ f, label }], modeLabel }
+   * f — доля радиуса (текущий режим), fb — базовые (пунктир), если есть.
+   */
+  function radarPts(n, cx, cy, R, fs) { return fs.map(function (f, i) { var a = -Math.PI / 2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * R * f, cy + Math.sin(a) * R * f]; }); }
+  function drawRadar(g, data, cx, cy, R) {
+    var n = data.axes.length, path = function (pts) { g.beginPath(); pts.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.closePath(); };
+    data.rings.forEach(function (r) {
+      path(radarPts(n, cx, cy, R, data.axes.map(function () { return r.f; })));
+      g.setLineDash(r.label === '×1' ? [8, 8] : []); g.strokeStyle = r.label === '×1' ? 'rgba(192,132,252,.6)' : 'rgba(168,85,247,.28)'; g.lineWidth = 2; g.stroke();
+      g.setLineDash([]); g.fillStyle = 'rgba(185,163,220,.75)'; g.font = '600 20px "Exo 2", sans-serif'; g.textAlign = 'left';
+      g.fillText(r.label, cx + 8, cy - R * r.f + 6);
+    });
+    radarPts(n, cx, cy, R, data.axes.map(function () { return 1; })).forEach(function (p) { g.beginPath(); g.moveTo(cx, cy); g.lineTo(p[0], p[1]); g.strokeStyle = 'rgba(168,85,247,.3)'; g.lineWidth = 2; g.stroke(); });
+    if (data.axes[0].fb !== undefined) {
+      path(radarPts(n, cx, cy, R, data.axes.map(function (x) { return x.fb; })));
+      g.setLineDash([12, 9]); g.strokeStyle = 'rgba(233,213,255,.6)'; g.lineWidth = 3; g.stroke(); g.setLineDash([]);
+    }
+    var cur = radarPts(n, cx, cy, R, data.axes.map(function (x) { return x.f; }));
+    path(cur); g.fillStyle = 'rgba(168,85,247,.38)'; g.fill();
+    g.shadowColor = '#c084fc'; g.shadowBlur = 24; g.strokeStyle = '#d8b4fe'; g.lineWidth = 4; g.stroke(); g.shadowBlur = 0;
+    cur.forEach(function (p) { g.beginPath(); g.arc(p[0], p[1], 8, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.strokeStyle = '#c084fc'; g.lineWidth = 3; g.stroke(); });
+    radarPts(n, cx, cy, R * 1.22, data.axes.map(function () { return 1; })).forEach(function (p, i) {
+      var x = data.axes[i]; g.textAlign = Math.abs(p[0] - cx) < 10 ? 'center' : p[0] > cx ? 'left' : 'right';
+      g.fillStyle = 'rgba(233,213,255,.95)'; g.font = '700 30px "Exo 2", sans-serif'; g.fillText(x.label, p[0], p[1] - 4);
+      g.fillStyle = '#d8b4fe'; g.font = '800 28px "Unbounded", "Exo 2", sans-serif'; g.fillText(x.txt, p[0], p[1] + 30);
+    });
+  }
+  function radarSVG(data) {
+    var S = 220, C = S / 2, R = 74, n = data.axes.length;
+    var pts = function (fs, r) { return radarPts(n, C, C, r || R, fs).map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '); };
+    var s = '<svg viewBox="0 0 ' + S + ' ' + S + '" class="css-radar" aria-label="Профиль статов">';
+    data.rings.forEach(function (r) { s += '<polygon class="rg' + (r.label === '×1' ? ' one' : '') + '" points="' + pts(data.axes.map(function () { return r.f; })) + '"/>'; });
+    radarPts(n, C, C, R, data.axes.map(function () { return 1; })).forEach(function (p) { s += '<line class="ax" x1="' + C + '" y1="' + C + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '"/>'; });
+    if (data.axes[0].fb !== undefined) s += '<polygon class="pb" points="' + pts(data.axes.map(function (x) { return x.fb; })) + '"/>';
+    s += '<polygon class="pc" points="' + pts(data.axes.map(function (x) { return x.f; })) + '"/>';
+    radarPts(n, C, C, R * 1.3, data.axes.map(function () { return 1; })).forEach(function (p, i) {
+      var x = data.axes[i], an = Math.abs(p[0] - C) < 6 ? 'middle' : p[0] > C ? 'start' : 'end', e = function (t) { return String(t).replace(/[&<>"]/g, ''); };
+      s += '<text class="lb" x="' + p[0].toFixed(1) + '" y="' + (p[1] - 2).toFixed(1) + '" text-anchor="' + an + '">' + e(x.label) + '</text><text class="lv" x="' + p[0].toFixed(1) + '" y="' + (p[1] + 10).toFixed(1) + '" text-anchor="' + an + '">' + e(x.txt) + '</text>';
+    });
+    return s + '</svg>';
+  }
+
   function paintBack(cv, card) {
     var g = cv.getContext('2d');
     g.clearRect(0, 0, CW, CH);
@@ -172,12 +215,21 @@
       g.beginPath(); g.moveTo(i, 0); g.lineTo(i + CH, CH); g.stroke();
       g.beginPath(); g.moveTo(i, CH); g.lineTo(i + CH, 0); g.stroke();
     }
-    g.save(); g.translate(0, (CH - CW) / 2); drawRunes(g, CW, 0.85); g.restore();
-    g.fillStyle = '#e9d5ff';
-    [[CW / 2, CH / 2 - 160], [CW / 2 + 160, CH / 2], [CW / 2, CH / 2 + 160], [CW / 2 - 160, CH / 2]].forEach(function (p) { g.beginPath(); g.arc(p[0], p[1], 10, 0, Math.PI * 2); g.fill(); });
-    g.shadowColor = '#c084fc'; g.shadowBlur = 30;
-    g.beginPath(); g.arc(CW / 2, CH / 2, 20, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
-    g.shadowBlur = 0;
+    if (card.radar && card.radar.axes && card.radar.axes.length) {
+      g.save(); g.globalAlpha = 0.35; g.translate(0, (CH - CW) / 2 - 60); drawRunes(g, CW, 0.5); g.restore();
+      g.textAlign = 'center'; g.fillStyle = 'rgba(192,132,252,.95)'; g.font = '700 30px "Unbounded", "Exo 2", sans-serif';
+      g.fillText('ПРОФИЛЬ', CW / 2, 140);
+      g.font = '600 24px "Exo 2", sans-serif'; g.fillStyle = 'rgba(185,163,220,.8)';
+      g.fillText('во сколько раз выше старта · ' + (card.radar.modeLabel || ''), CW / 2, 182);
+      drawRadar(g, card.radar, CW / 2, CH / 2 - 60, 300);
+    } else {
+      g.save(); g.translate(0, (CH - CW) / 2); drawRunes(g, CW, 0.85); g.restore();
+      g.fillStyle = '#e9d5ff';
+      [[CW / 2, CH / 2 - 160], [CW / 2 + 160, CH / 2], [CW / 2, CH / 2 + 160], [CW / 2 - 160, CH / 2]].forEach(function (p) { g.beginPath(); g.arc(p[0], p[1], 10, 0, Math.PI * 2); g.fill(); });
+      g.shadowColor = '#c084fc'; g.shadowBlur = 30;
+      g.beginPath(); g.arc(CW / 2, CH / 2, 20, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
+      g.shadowBlur = 0;
+    }
     g.strokeStyle = 'rgba(192,132,252,.95)'; g.lineWidth = 4;
     roundRect(g, 30, 30, CW - 60, CH - 60, 40); g.stroke();
     g.textAlign = 'center';
@@ -434,17 +486,28 @@
     aura.scale.set(4.2, 5.6, 1); aura.position.set(0, cardY, -0.6); scene.add(aura);
 
     /* управление */
-    var rotY = 0, rotTarget = 0, tilt = 0, tiltTarget = 0, dragging = false, lastX = 0, lastY = 0, idle = 10, vel = 0;
-    canvas.addEventListener('pointerdown', function (e) { dragging = true; lastX = e.clientX; lastY = e.clientY; idle = 0; canvas.setPointerCapture(e.pointerId); });
+    var rotY = 0, rotTarget = 0, tilt = 0, tiltTarget = 0, dragging = false, lastX = 0, lastY = 0, idle = 10, vel = 0, hold = false, downX = 0, downY = 0, downT = 0;
+    canvas.addEventListener('pointerdown', function (e) { dragging = true; lastX = downX = e.clientX; lastY = downY = e.clientY; downT = Date.now(); idle = 0; canvas.setPointerCapture(e.pointerId); });
     canvas.addEventListener('pointermove', function (e) {
       if (!dragging) return;
       var dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
       rotTarget += dx * 0.012; vel = dx * 0.012;
+      if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 6) hold = false;
       tiltTarget = Math.max(-0.25, Math.min(0.35, tiltTarget + dy * 0.003));
     });
     function end() { dragging = false; idle = 0; }
-    canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
-    canvas.addEventListener('dblclick', function () { rotTarget = Math.round(rotTarget / (Math.PI * 2)) * Math.PI * 2; tiltTarget = 0; idle = 0; });
+    /* нажатие (без перетаскивания) переворачивает карточку: лицо ↔ профиль; карточка замирает, пока её не потянут */
+    function flip() {
+      var face = Math.round(rotTarget / Math.PI) * Math.PI;
+      rotTarget = face + Math.PI; vel = 0; tiltTarget = 0; hold = true; idle = 0;
+    }
+    canvas.addEventListener('pointerup', function (e) {
+      var tap = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) < 6 && Date.now() - downT < 450;
+      end(); if (tap) flip();
+    });
+    canvas.addEventListener('pointercancel', end);
+    canvas.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+    canvas.setAttribute('tabindex', '0'); canvas.setAttribute('role', 'button'); canvas.setAttribute('aria-label', 'Карточка: нажми, чтобы перевернуть и увидеть профиль');
 
     function resize() {
       var w = stage.clientWidth, h = stage.clientHeight;
@@ -473,7 +536,7 @@
       if (!dragging) {
         if (Math.abs(vel) > 0.0005) { rotTarget += vel; vel *= 0.93; }
         // карточка медленно вращается сама: быстрее на ребре, медленнее лицом к зрителю
-        if (idle > 2.5 && motion) rotTarget += dt * (0.35 + 0.45 * Math.pow(Math.abs(Math.sin(rotTarget)), 2)) * (1 + energy * 0.3);
+        if (idle > 2.5 && motion && !hold) rotTarget += dt * (0.35 + 0.45 * Math.pow(Math.abs(Math.sin(rotTarget)), 2)) * (1 + energy * 0.3);
       }
       rotY += (rotTarget - rotY) * Math.min(1, dt * 6);
       tilt += (tiltTarget - tilt) * Math.min(1, dt * 6);
@@ -561,7 +624,8 @@
 
     return {
       setState: setState,
-      setCard: function (c) { cardData = c || {}; repaint(); },
+      setCard: function (c) { var rd = cardData.radar; cardData = c || {}; if (rd && !cardData.radar) cardData.radar = rd; repaint(); },
+      setRadar: function (d) { cardData.radar = d; painted.then(function () { paintBack(backCv, cardData); backTex.needsUpdate = true; }); },
       ready: function () { return painted; },
       snapshot: snapshot,
       webgl: true
@@ -574,9 +638,14 @@
     var el = opts.fallback;
     opts.canvas.style.display = 'none';
     el.hidden = false;
-    el.innerHTML = '<div class="css-card"><div class="css-face css-front"><img alt=""><div class="css-name"></div><div class="css-style"></div></div><div class="css-face css-back"><div class="css-name"></div></div></div><div class="css-pedestal"></div>';
+    el.innerHTML = '<div class="css-card" role="button" tabindex="0" aria-label="Карточка: нажми, чтобы перевернуть и увидеть профиль"><div class="css-face css-front"><img alt=""><div class="css-name"></div><div class="css-style"></div></div><div class="css-face css-back"><div class="css-back-h">Профиль</div><div class="css-radar-box"></div><div class="css-name"></div></div></div><div class="css-pedestal"></div>';
+    var cc = el.querySelector('.css-card');
+    function flip() { cc.classList.add('held'); cc.classList.toggle('flipped'); }
+    cc.addEventListener('click', flip);
+    cc.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
     return {
       setState: function () {},
+      setRadar: function (d) { el.querySelector('.css-radar-box').innerHTML = d && d.axes && d.axes.length ? radarSVG(d) : ''; },
       ready: function () { return Promise.resolve(); },
       snapshot: null,
       webgl: false,

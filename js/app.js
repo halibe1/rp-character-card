@@ -186,32 +186,21 @@
       return { key: k, label: kv[1], value: v, ratio: Math.max(ratio, 1e-3), unit: k === 'durability' ? 'кг' : RULES.stats[k].unit, ref: ref };
     });
   }
+  /** Данные профиля для оборота карточки: доли радиуса по логарифмической шкале (кольца ×1, ×2, ×5, ×10…). */
   function renderRadar() {
-    var box = $('#radar'); if (!box) return;
+    if (!figure || !figure.setRadar) return;
     var cur = radarVals(R), base = view.mode === 'base' ? null : radarVals(compute('base'));
     var all = cur.concat(base || []), mx = Math.max.apply(null, all.map(function (x) { return x.ratio; }));
     var NICE = [2, 3, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000], hi = 2;
     NICE.some(function (v) { hi = v; return v >= mx * 1.05; });
-    var lo = 0.5, L = function (r) { return Math.max(0, Math.min(1, (Math.log(r) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)))); };
-    var S = 240, C = S / 2, Rr = 84, n = RADAR_KEYS.length;
-    function pt(i, f) { var a = -Math.PI / 2 + i * 2 * Math.PI / n; return [C + Math.cos(a) * Rr * f, C + Math.sin(a) * Rr * f]; }
-    function poly(vals) { return vals.map(function (x, i) { var p = pt(i, Math.max(0.03, L(x.ratio))); return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '); }
+    var lo = 0.5, L = function (r) { return Math.max(0.03, Math.min(1, (Math.log(r) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)))); };
     var rings = [1].concat(NICE.filter(function (v) { return v < hi; })).concat([hi]);
     if (rings.length > 5) rings = rings.filter(function (v, i) { return i === 0 || i === rings.length - 1 || [10, 100, 1000].indexOf(v) !== -1; });
-    var svg = '<svg viewBox="0 0 ' + S + ' ' + S + '" role="img" aria-label="Профиль статов">';
-    rings.forEach(function (r) {
-      var f = L(r); svg += '<polygon class="rg' + (r === 1 ? ' one' : '') + '" points="' + RADAR_KEYS.map(function (kv, i) { var p = pt(i, f); return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ') + '"/>';
-      var lp = pt(0, f); svg += '<text class="rl" x="' + (lp[0] + 4).toFixed(1) + '" y="' + (lp[1] + 3).toFixed(1) + '">×' + r + '</text>';
+    figure.setRadar({
+      modeLabel: R.modeLabel,
+      rings: rings.map(function (r) { return { f: L(r), label: '×' + r }; }),
+      axes: cur.map(function (x, i) { var o = { label: x.label, f: L(x.ratio), txt: '×' + fmt(x.ratio, x.ratio < 10 ? 1 : 0) }; if (base) o.fb = L(base[i].ratio); return o; })
     });
-    RADAR_KEYS.forEach(function (kv, i) { var p = pt(i, 1); svg += '<line class="ax" x1="' + C + '" y1="' + C + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '"/>'; });
-    if (base) svg += '<polygon class="pb" points="' + poly(base) + '"/>';
-    svg += '<polygon class="pc" points="' + poly(cur) + '"/>';
-    cur.forEach(function (x, i) {
-      var p = pt(i, Math.max(0.03, L(x.ratio))), lp = pt(i, 1.27), anchor = Math.abs(lp[0] - C) < 6 ? 'middle' : lp[0] > C ? 'start' : 'end';
-      var tip = tipAttr(x.label, null, '<b>' + fmt(x.value, x.key === 'reaction' || x.key === 'speed' ? 1 : 0) + ' ' + esc(x.unit) + '</b> — ×' + fmt(x.ratio, 2) + (x.key === 'reaction' ? ' быстрее' : '') + ' относительно старта (' + fmt(x.ref, 0) + ' ' + esc(x.unit) + ')' + (base ? '<br>База: ' + fmt(base[i].value, x.key === 'reaction' || x.key === 'speed' ? 1 : 0) + ' ' + esc(x.unit) + ' (×' + fmt(base[i].ratio, 2) + ')' : ''));
-      svg += '<g class="rp"' + tip + '><circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3.2"/><text class="lb" x="' + lp[0].toFixed(1) + '" y="' + (lp[1] - 2).toFixed(1) + '" text-anchor="' + anchor + '">' + esc(x.label) + '</text><text class="lv" x="' + lp[0].toFixed(1) + '" y="' + (lp[1] + 10).toFixed(1) + '" text-anchor="' + anchor + '">×' + fmt(x.ratio, x.ratio < 10 ? 1 : 0) + '</text></g>';
-    });
-    box.innerHTML = svg + '</svg>' + (base ? '<div class="radar-key"><span class="k cur"></span>' + esc(R.modeLabel) + '<span class="k base"></span>Базовые</div>' : '');
   }
   /** Постепенные бафы: счётчик постов боя (виден, только если у персонажа есть такие бафы). */
   function renderPosts() {
