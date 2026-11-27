@@ -177,9 +177,12 @@
     if (!box) return;
     if (!G.list.length) { box.hidden = true; return; }
     box.hidden = false;
+    var open = false; try { open = localStorage.getItem('rp-posts-open') === '1'; } catch (e) { /* ок */ }
+    box.classList.toggle('collapsed', !open);
     var STAT_L = {}; STAT_OPTS.forEach(function (o) { STAT_L[o[0]] = o[1]; });
     box.innerHTML = '<div class="post-h"><span>Пост боя</span><div class="post-step"><button type="button" data-post="-1" aria-label="Пост назад"' + (view.posts ? '' : ' disabled') + '>−</button><b>' + view.posts + '</b><button type="button" data-post="1" aria-label="Следующий пост">+</button></div>' +
-      (view.posts ? '<button type="button" class="post-reset" data-post="0" title="Новый бой: сбросить посты">сброс</button>' : '') + '</div>' +
+      (view.posts ? '<button type="button" class="post-reset" data-post="0" title="Новый бой: сбросить посты">сброс</button>' : '') +
+      '<button type="button" class="post-fold" data-post-fold aria-expanded="' + open + '" title="' + (open ? 'Свернуть' : 'Показать бафы') + '">' + (open ? '' : G.list.length + ' ' + (G.list.length === 1 ? 'бафф' : G.list.length < 5 ? 'бафа' : 'бафов') + ' ') + '<span aria-hidden="true">▾</span></button></div>' +
       G.list.map(function (g) {
         var pct = g.max > 0 ? Math.min(1, g.now / g.max) : 0;
         return '<div class="post-row' + (g.full ? ' full' : '') + '"' + tipAttr(g.label || 'Постепенный бафф', null, (g.type === 'debuff' ? 'Дебафф ' : 'Бафф ') + esc((STAT_L[g.stat] || g.stat).toLowerCase()) + ': ' + fmt(g.per, 1) + '% за каждый пост боя' + (g.max > 0 ? ', максимум ' + fmt(g.max, 1) + '%' : '') + '.<br>Сейчас пост ' + g.posts + ': <b>' + fmt(g.now, 1) + '%</b>.' + (G.active ? '' : '<br>Действует только в режиме «Активные».')) + '>' +
@@ -1331,7 +1334,9 @@ function allocEditor(a, base, i) {
       var b = e.target.closest('button[data-abmode]'); if (!b) return;
       view.mode = b.getAttribute('data-abmode'); renderAll();
     });
-    $('#postCtl').addEventListener('click', function (e) {
+    var box0 = $('#postCtl');
+    box0.addEventListener('click', function (e) {
+      if (e.target.closest('[data-post-fold]')) { var o = box0.classList.contains('collapsed'); try { localStorage.setItem('rp-posts-open', o ? '1' : '0'); } catch (er) { /* ок */ } renderPosts(); return; }
       var b = e.target.closest('[data-post]'); if (!b) return;
       var v = +b.getAttribute('data-post');
       view.posts = v === 0 ? 0 : Math.max(0, view.posts + v);
