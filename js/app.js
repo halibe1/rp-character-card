@@ -336,7 +336,7 @@
   function drow(label, value, unit, sub, title, formula, extra, cls) {
     return '<div class="drow' + (cls ? ' ' + cls : '') + '"' + tipAttr(title || label, formula, extra) + '><span class="drl">' + esc(label) + '</span><span class="drv">' + value + (unit ? '<small>' + esc(unit) + '</small>' : '') + '</span>' + (sub ? '<span class="drs">' + sub + '</span>' : '') + '</div>';
   }
-  var dmoreOpen = true, testOpen = false;
+  var dmoreOpen = false, testOpen = false;
 
   function renderDerived() {
     var d = R.derived, mt = d.meleeTiming, sm = d.stamina;
