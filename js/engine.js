@@ -213,7 +213,7 @@
       buffs.push(normBuff({ mode: 'active', stat: 'all', percent: opts.testBuff.percent, source: tsrc, layer: tsrc === 'artifact' ? 'internal' : 'external', label: 'Тестовый бафф' }));
     }
     buffs = buffs.filter(function (b) { return b.enabled; });
-    /* постепенные бафы: +N% за каждый пост боя, но не больше максимума (только в «Активных») */
+    /* постепенные бафы: +N% за каждый пост боя, но не больше максимума (в «Пассивных» и «Активных», базу не трогают) */
     var posts = Math.max(0, Math.floor(num(opts.posts, 0)));
     var gradual = [];
     buffs = buffs.map(function (b) {
@@ -369,7 +369,7 @@
     /* способности атрибута: статы считаются от текущих статов персонажа */
     d.abilities = abilityStats(ch.abilities, { punch: S('punch'), speed: S('speed'), durability: d.durability.value, lift: S('lift'), reaction: S('reaction') }, mods.attrPower, ch.ap, rules);
 
-    d.gradual = { posts: posts, list: gradual, active: mode === 'active' };
+    d.gradual = { posts: posts, list: gradual, active: mode !== 'base' };
     d.gift = { key: ch.gift || '', label: gift.label, short: gift.short, desc: gift.desc, pros: gift.pros || [], cons: gift.cons || [] };
     return { mode: mode, modeLabel: rules.modes[mode].label, stats: stats, derived: d };
   }

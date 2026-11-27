@@ -185,12 +185,12 @@
       '<button type="button" class="post-fold" data-post-fold aria-expanded="' + open + '" title="' + (open ? 'Свернуть' : 'Показать бафы') + '">' + (open ? '' : G.list.length + ' ' + (G.list.length === 1 ? 'бафф' : G.list.length < 5 ? 'бафа' : 'бафов') + ' ') + '<span aria-hidden="true">▾</span></button></div>' +
       G.list.map(function (g) {
         var pct = g.max > 0 ? Math.min(1, g.now / g.max) : 0;
-        return '<div class="post-row' + (g.full ? ' full' : '') + '"' + tipAttr(g.label || 'Постепенный бафф', null, (g.type === 'debuff' ? 'Дебафф ' : 'Бафф ') + esc((STAT_L[g.stat] || g.stat).toLowerCase()) + ': ' + fmt(g.per, 1) + '% за каждый пост боя' + (g.max > 0 ? ', максимум ' + fmt(g.max, 1) + '%' : '') + '.<br>Сейчас пост ' + g.posts + ': <b>' + fmt(g.now, 1) + '%</b>.' + (G.active ? '' : '<br>Действует только в режиме «Активные».')) + '>' +
+        return '<div class="post-row' + (g.full ? ' full' : '') + '"' + tipAttr(g.label || 'Постепенный бафф', null, (g.type === 'debuff' ? 'Дебафф ' : 'Бафф ') + esc((STAT_L[g.stat] || g.stat).toLowerCase()) + ': ' + fmt(g.per, 1) + '% за каждый пост боя' + (g.max > 0 ? ', максимум ' + fmt(g.max, 1) + '%' : '') + '.<br>Сейчас пост ' + g.posts + ': <b>' + fmt(g.now, 1) + '%</b>.' + (G.active ? '' : '<br>В режиме «Базовые» не учитывается.')) + '>' +
           '<div class="post-l"><b>' + esc(g.label || 'Постепенный') + '</b><small>' + esc(STAT_L[g.stat] || g.stat) + '</small></div>' +
           '<div class="post-v">' + (g.type === 'debuff' ? '−' : '+') + fmt(g.now, 1) + '%' + (g.max > 0 ? '<small> / ' + fmt(g.max, 1) + '%</small>' : '') + '</div>' +
           (g.max > 0 ? '<div class="post-bar"><i style="width:' + (pct * 100) + '%"></i></div>' : '') + '</div>';
       }).join('') +
-      (G.active ? '' : '<div class="post-note">Постепенные бафы считаются в режиме «Активные» — нажми «+», и режим переключится.</div>');
+      (G.active ? '' : '<div class="post-note">В режиме «Базовые» постепенные бафы не учитываются — переключись на «Пассивные» или «Активные».</div>');
   }
   function renderStats() {
     STAT_ORDER.forEach(function (k) {
@@ -765,7 +765,7 @@ function allocEditor(a, base, i) {
       var g0 = rows[0].b, mode = g0.mode === 'active' || g0.mode === 'gradual' ? g0.mode : 'passive';
       return '<div class="bgrp" data-group="' + esc(gid) + '">' +
         '<div class="bgrp-h"><input type="text" data-gname="' + esc(gid) + '" value="' + esc(g0.label || '') + '" placeholder="Название, например: Режим зверя" aria-label="Название эффекта">' +
-        '<div class="seg" role="group" aria-label="Когда действует"><button type="button" data-gmode="' + esc(gid) + '" data-v="passive"' + (mode === 'passive' ? ' class="on"' : '') + ' title="Действует постоянно">Пассивный</button><button type="button" data-gmode="' + esc(gid) + '" data-v="active"' + (mode === 'active' ? ' class="on"' : '') + ' title="Включается в бою">Активный</button><button type="button" data-gmode="' + esc(gid) + '" data-v="gradual"' + (mode === 'gradual' ? ' class="on"' : '') + ' title="Растёт с каждым постом боя до максимума (режим «Активные»)">Постепенный</button></div>' +
+        '<div class="seg" role="group" aria-label="Когда действует"><button type="button" data-gmode="' + esc(gid) + '" data-v="passive"' + (mode === 'passive' ? ' class="on"' : '') + ' title="Действует постоянно">Пассивный</button><button type="button" data-gmode="' + esc(gid) + '" data-v="active"' + (mode === 'active' ? ' class="on"' : '') + ' title="Включается в бою">Активный</button><button type="button" data-gmode="' + esc(gid) + '" data-v="gradual"' + (mode === 'gradual' ? ' class="on"' : '') + ' title="Растёт с каждым постом боя до максимума (режимы «Пассивные» и «Активные»)">Постепенный</button></div>' +
         '<button type="button" class="x" data-del-group="' + esc(gid) + '" aria-label="Удалить эффект">✕</button></div>' +
         rows.map(function (x) {
           var scoped = RULES.modifiers[x.b.stat] && RULES.modifiers[x.b.stat].scoped;
@@ -1340,7 +1340,6 @@ function allocEditor(a, base, i) {
       var b = e.target.closest('[data-post]'); if (!b) return;
       var v = +b.getAttribute('data-post');
       view.posts = v === 0 ? 0 : Math.max(0, view.posts + v);
-      if (v > 0 && view.mode !== 'active') view.mode = 'active';
       renderAll();
     });
     $('#modeSwitch').addEventListener('click', function (e) {

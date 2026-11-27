@@ -598,9 +598,10 @@ test('«Бой — место практики»: +20% силы атрибута
 test('после 6 постов упирается в максимум: пост 10 → 220%, а не 300%', () => {
   const r = run(practice(), 'active', { posts: 10 }).derived; near(r.mods.attrPower.value, 220); assert.ok(r.gradual.list[0].full);
 });
-test('пост 0 и режим «Пассивные» — постепенный бафф не действует', () => {
+test('постепенный бафф действует и в «Пассивных», но не в «Базовых» и не на посту 0', () => {
   near(run(practice(), 'active', { posts: 0 }).derived.mods.attrPower.value, 100);
-  near(run(practice(), 'passive', { posts: 5 }).derived.mods.attrPower.value, 100);
+  near(run(practice(), 'passive', { posts: 5 }).derived.mods.attrPower.value, 200);
+  near(run(practice(), 'base', { posts: 5 }).derived.mods.attrPower.value, 100);
 });
 test('постепенный бафф стата: сила удара +10% за пост до 30% → пост 5: 1000 × 1,3', () => {
   near(run(kenos([{ stat: 'punch', percent: 10, max: 30, mode: 'gradual', layer: 'internal', source: 'trait' }]), 'active', { posts: 5 }).stats.punch.value, 1300);
