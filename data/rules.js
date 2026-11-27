@@ -17,7 +17,7 @@
   "modes": {
     "base":    { "label": "Базовые",   "includes": [] },
     "passive": { "label": "Пассивные", "includes": ["passive"] },
-    "active":  { "label": "Активные",  "includes": ["passive", "active"] }
+    "active":  { "label": "Активные",  "includes": ["passive", "active", "gradual"] }
   },
 
   "gifts": {

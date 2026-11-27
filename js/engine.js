@@ -50,6 +50,7 @@
       layer: b.layer === 'external' ? 'external' : 'internal',
       type: b.type === 'debuff' || b.type === 'buff' ? b.type : (p < 0 ? 'debuff' : 'buff'),
       magnitude: Math.abs(p),
+      max: b.mode === 'gradual' ? Math.abs(num(b.max, 0)) : 0,
       enabled: b.enabled !== false,
       affectsLimit: b.affectsLimit === true
     };
@@ -212,6 +213,15 @@
       buffs.push(normBuff({ mode: 'active', stat: 'all', percent: opts.testBuff.percent, source: tsrc, layer: tsrc === 'artifact' ? 'internal' : 'external', label: 'Тестовый бафф' }));
     }
     buffs = buffs.filter(function (b) { return b.enabled; });
+    /* постепенные бафы: +N% за каждый пост боя, но не больше максимума (только в «Активных») */
+    var posts = Math.max(0, Math.floor(num(opts.posts, 0)));
+    var gradual = [];
+    buffs = buffs.map(function (b) {
+      if (b.mode !== 'gradual') return b;
+      var now = Math.min(b.magnitude * posts, b.max > 0 ? b.max : Infinity);
+      gradual.push({ label: b.label, stat: b.stat, type: b.type, per: b.magnitude, max: b.max, now: now, posts: posts, full: b.max > 0 && now >= b.max });
+      return Object.assign({}, b, { perPost: b.magnitude, magnitude: now, label: (b.label || 'Постепенный') + ' (пост ' + posts + ': ' + n(b.magnitude, 1) + '% × ' + posts + (b.max > 0 ? ', до ' + n(b.max, 1) + '%' : '') + ')' });
+    }).filter(function (b) { return b.magnitude > 0; });
 
     /* сила атрибута / боевого искусства усиливает величину бафов своего источника:
        бафф атрибута +100% при силе атрибута +200% (множитель ×3) станет +300%;
@@ -359,6 +369,7 @@
     /* способности атрибута: статы считаются от текущих статов персонажа */
     d.abilities = abilityStats(ch.abilities, { punch: S('punch'), speed: S('speed'), durability: d.durability.value, lift: S('lift'), reaction: S('reaction') }, mods.attrPower, ch.ap, rules);
 
+    d.gradual = { posts: posts, list: gradual, active: mode === 'active' };
     d.gift = { key: ch.gift || '', label: gift.label, short: gift.short, desc: gift.desc, pros: gift.pros || [], cons: gift.cons || [] };
     return { mode: mode, modeLabel: rules.modes[mode].label, stats: stats, derived: d };
   }

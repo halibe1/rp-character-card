@@ -97,7 +97,7 @@
     c.buffs = c.buffs.filter(function (b) { return n(b.percent); }).map(function (b) {
       var u = upgradeBuff(Object.assign({}, b, { percent: n(b.percent) }));
       var scoped = RULES.modifiers[u.stat] && RULES.modifiers[u.stat].scoped;
-      return { id: u.id || makeBuffId(), group: String(u.group || ''), mode: u.mode, stat: u.stat, percent: u.percent, type: u.type, layer: u.layer, scope: scoped ? u.scope : 'all', source: u.source || '', label: String(u.label || '').trim(), enabled: u.enabled };
+      return { id: u.id || makeBuffId(), group: String(u.group || ''), mode: u.mode, stat: u.stat, percent: u.percent, type: u.type, layer: u.layer, scope: scoped ? u.scope : 'all', source: u.source || '', label: String(u.label || '').trim(), enabled: u.enabled, max: u.mode === 'gradual' ? Math.max(0, n(u.max) || 0) : undefined };
     });
     return c;
   }

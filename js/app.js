@@ -87,22 +87,23 @@
   var chars = [];
   var firstRun = false;
   var ch = null;
-  var view = { mode: 'base', wounds: [], testBuff: 0, testSource: 'external' };
+  var view = { mode: 'base', wounds: [], testBuff: 0, testSource: 'external', posts: 0 };
   var R = null;
   var figure = null;
   var prevVals = {};
 
   function viewKey() { return 'rp-view:' + ch.id; }
-  function saveView() { try { localStorage.setItem(viewKey(), JSON.stringify({ mode: view.mode, wounds: view.wounds })); } catch (e) { /* ок */ } }
+  function saveView() { try { localStorage.setItem(viewKey(), JSON.stringify({ mode: view.mode, wounds: view.wounds, posts: view.posts })); } catch (e) { /* ок */ } }
   function loadView() {
     var s = null;
     try { s = JSON.parse(localStorage.getItem(viewKey()) || 'null'); } catch (e) { s = null; }
     view.mode = (s && RULES.modes[s.mode]) ? s.mode : 'base';
     view.wounds = (s && s.wounds) || [];
+    view.posts = Math.max(0, Math.floor((s && s.posts) || 0));
     view.testBuff = 0;
   }
   function compute(mode) {
-    return E.compute(ch, RULES, { mode: mode || view.mode, wounds: view.wounds, testBuff: view.testBuff ? { percent: view.testBuff, source: view.testSource } : null });
+    return E.compute(ch, RULES, { mode: mode || view.mode, wounds: view.wounds, posts: view.posts, testBuff: view.testBuff ? { percent: view.testBuff, source: view.testSource } : null });
   }
 
   /* ================= анимация чисел ================= */
@@ -170,6 +171,24 @@
     return Math.max(0.02, Math.min(1, v / s.barMax));
   }
 
+  /** Постепенные бафы: счётчик постов боя (виден, только если у персонажа есть такие бафы). */
+  function renderPosts() {
+    var box = $('#postCtl'), G = R.derived.gradual;
+    if (!box) return;
+    if (!G.list.length) { box.hidden = true; return; }
+    box.hidden = false;
+    var STAT_L = {}; STAT_OPTS.forEach(function (o) { STAT_L[o[0]] = o[1]; });
+    box.innerHTML = '<div class="post-h"><span>Пост боя</span><div class="post-step"><button type="button" data-post="-1" aria-label="Пост назад"' + (view.posts ? '' : ' disabled') + '>−</button><b>' + view.posts + '</b><button type="button" data-post="1" aria-label="Следующий пост">+</button></div>' +
+      (view.posts ? '<button type="button" class="post-reset" data-post="0" title="Новый бой: сбросить посты">сброс</button>' : '') + '</div>' +
+      G.list.map(function (g) {
+        var pct = g.max > 0 ? Math.min(1, g.now / g.max) : 0;
+        return '<div class="post-row' + (g.full ? ' full' : '') + '"' + tipAttr(g.label || 'Постепенный бафф', null, (g.type === 'debuff' ? 'Дебафф ' : 'Бафф ') + esc((STAT_L[g.stat] || g.stat).toLowerCase()) + ': ' + fmt(g.per, 1) + '% за каждый пост боя' + (g.max > 0 ? ', максимум ' + fmt(g.max, 1) + '%' : '') + '.<br>Сейчас пост ' + g.posts + ': <b>' + fmt(g.now, 1) + '%</b>.' + (G.active ? '' : '<br>Действует только в режиме «Активные».')) + '>' +
+          '<div class="post-l"><b>' + esc(g.label || 'Постепенный') + '</b><small>' + esc(STAT_L[g.stat] || g.stat) + '</small></div>' +
+          '<div class="post-v">' + (g.type === 'debuff' ? '−' : '+') + fmt(g.now, 1) + '%' + (g.max > 0 ? '<small> / ' + fmt(g.max, 1) + '%</small>' : '') + '</div>' +
+          (g.max > 0 ? '<div class="post-bar"><i style="width:' + (pct * 100) + '%"></i></div>' : '') + '</div>';
+      }).join('') +
+      (G.active ? '' : '<div class="post-note">Постепенные бафы считаются в режиме «Активные» — нажми «+», и режим переключится.</div>');
+  }
   function renderStats() {
     STAT_ORDER.forEach(function (k) {
       var st = R.stats[k], row = $('#st-' + k), def = RULES.stats[k];
@@ -356,6 +375,7 @@
     R = compute();
     renderModeSwitch();
     renderStats();
+    renderPosts();
     renderWounds();
     renderLimit();
     renderDerived();
@@ -473,7 +493,7 @@
     }).join('') + '<button class="mini-btn" data-wi-clear>сбросить всё</button></div>' : '<div class="empty-note" style="margin:10px 0">Добавь бонус — рядом появится сравнение.</div>';
     if (!list.length) { $('#wiOut').innerHTML = ''; return; }
     var alt = clone(ch); alt.buffs = (alt.buffs || []).concat(list.map(function (b) { return Object.assign({ enabled: true }, b); }));
-    var A = compute(wiMode()), B = E.compute(alt, RULES, { mode: wiMode(), wounds: view.wounds, testBuff: view.testBuff ? { percent: view.testBuff, source: view.testSource } : null });
+    var A = compute(wiMode()), B = E.compute(alt, RULES, { mode: wiMode(), wounds: view.wounds, posts: view.posts, testBuff: view.testBuff ? { percent: view.testBuff, source: view.testSource } : null });
     function main(X) { return (X.derived.strikes.filter(function (s) { return s.primary; })[0] || X.derived.strikes[0]).value; }
     var rows = STAT_ORDER.map(function (k) { var d = RULES.stats[k]; return [d.label, A.stats[k].value, B.stats[k].value, d.unit, d.betterLower, 1]; });
     rows.push(['Прочность', A.derived.durability.value, B.derived.durability.value, 'кг', false, 0]);
@@ -734,20 +754,23 @@ function allocEditor(a, base, i) {
         return keys.length ? keys.map(function (k) { var lbl = (STAT_OPTS.filter(function (o) { return o[0] === k; })[0] || [k, k])[1]; return esc(lbl) + ' <b>' + (by[k] > 0 ? '+' : '−') + fmt(Math.abs(by[k]), 1) + '%</b>'; }).join(', ') : '';
       }
       var ps = line('passive'), as = line('active');
-      if (!ps && !as) return '';
-      return '<div class="bsec-sum">' + (ps ? '<span><i>всегда</i> ' + ps + '</span>' : '') + (as ? '<span><i>в бою +</i> ' + as + '</span>' : '') + '</div>';
+      var gs = list.filter(function (x) { var p = parseFloat(x.b.percent); return x.b.mode === 'gradual' && x.b.enabled !== false && p; }).map(function (x) { var lbl = (STAT_OPTS.filter(function (o) { return o[0] === x.b.stat; })[0] || [x.b.stat, x.b.stat])[1]; return esc(lbl) + ' <b>' + (x.b.type === 'debuff' ? '−' : '+') + fmt(parseFloat(x.b.percent), 1) + '%</b>/пост' + (parseFloat(x.b.max) > 0 ? ' до ' + fmt(parseFloat(x.b.max), 1) + '%' : ''); }).join(', ');
+      if (!ps && !as && !gs) return '';
+      return '<div class="bsec-sum">' + (ps ? '<span><i>всегда</i> ' + ps + '</span>' : '') + (as ? '<span><i>в бою +</i> ' + as + '</span>' : '') + (gs ? '<span><i>постепенно</i> ' + gs + '</span>' : '') + '</div>';
     }
     function groupHtml(gid, rows) {
-      var g0 = rows[0].b, mode = g0.mode === 'active' ? 'active' : 'passive';
+      var g0 = rows[0].b, mode = g0.mode === 'active' || g0.mode === 'gradual' ? g0.mode : 'passive';
       return '<div class="bgrp" data-group="' + esc(gid) + '">' +
         '<div class="bgrp-h"><input type="text" data-gname="' + esc(gid) + '" value="' + esc(g0.label || '') + '" placeholder="Название, например: Режим зверя" aria-label="Название эффекта">' +
-        '<div class="seg" role="group" aria-label="Когда действует"><button type="button" data-gmode="' + esc(gid) + '" data-v="passive"' + (mode === 'passive' ? ' class="on"' : '') + ' title="Действует постоянно">Пассивный</button><button type="button" data-gmode="' + esc(gid) + '" data-v="active"' + (mode === 'active' ? ' class="on"' : '') + ' title="Включается в бою">Активный</button></div>' +
+        '<div class="seg" role="group" aria-label="Когда действует"><button type="button" data-gmode="' + esc(gid) + '" data-v="passive"' + (mode === 'passive' ? ' class="on"' : '') + ' title="Действует постоянно">Пассивный</button><button type="button" data-gmode="' + esc(gid) + '" data-v="active"' + (mode === 'active' ? ' class="on"' : '') + ' title="Включается в бою">Активный</button><button type="button" data-gmode="' + esc(gid) + '" data-v="gradual"' + (mode === 'gradual' ? ' class="on"' : '') + ' title="Растёт с каждым постом боя до максимума (режим «Активные»)">Постепенный</button></div>' +
         '<button type="button" class="x" data-del-group="' + esc(gid) + '" aria-label="Удалить эффект">✕</button></div>' +
         rows.map(function (x) {
           var scoped = RULES.modifiers[x.b.stat] && RULES.modifiers[x.b.stat].scoped;
           return '<div class="brow">' +
             '<select data-f="buffs.' + x.i + '.stat" aria-label="Что бафает">' + opts(STAT_OPTS, x.b.stat) + '</select>' +
-            '<div class="pct">' + inp('buffs.' + x.i + '.percent', x.b.percent, 'number', ' min="0" step="1" placeholder="50" aria-label="Процент"') + '<span>%</span></div>' +
+            (mode === 'gradual'
+              ? '<div class="pct grad">' + inp('buffs.' + x.i + '.percent', x.b.percent, 'number', ' min="0" step="1" placeholder="20" aria-label="Процент за пост"') + '<span>% за пост, до</span>' + inp('buffs.' + x.i + '.max', x.b.max, 'number', ' min="0" step="1" placeholder="120" aria-label="Максимум, %"') + '<span>%</span></div>'
+              : '<div class="pct">' + inp('buffs.' + x.i + '.percent', x.b.percent, 'number', ' min="0" step="1" placeholder="50" aria-label="Процент"') + '<span>%</span></div>') +
             '<select data-f="buffs.' + x.i + '.type" aria-label="Баф или дебафф">' + opts(TYPE_OPTS, x.b.type) + '</select>' +
             (scoped ? '<select data-f="buffs.' + x.i + '.scope" aria-label="Аспект">' + opts(SCOPE_OPTS, x.b.scope) + '</select>' : '<span></span>') +
             '<input type="checkbox" class="buff-on" data-f="buffs.' + x.i + '.enabled"' + (x.b.enabled === false ? '' : ' checked') + ' title="Бонус включён" aria-label="Включён">' +
@@ -1093,7 +1116,7 @@ function allocEditor(a, base, i) {
     }, true);
     body.addEventListener('change', function (e) {
       if (/^(ap|abilities\.\d+\.(description|pros\.\d+|cons\.\d+|persona|personaAp|subCount))$/.test(e.target.getAttribute('data-f') || '')) { renderEditor(); return; }
-      if (/^(gift|buffs\.\d+\.(stat|type|percent|enabled))$/.test(e.target.getAttribute('data-f') || '')) { renderEditor(); return; }
+      if (/^(gift|buffs\.\d+\.(stat|type|percent|max|enabled))$/.test(e.target.getAttribute('data-f') || '')) { renderEditor(); return; }
       var ug = e.target.getAttribute('data-upg');
       if (ug) {
         var up = ug.split('.'), UA = draft.abilities[+up[0]], its = UA ? upgItems(UA) : [], it = its[+up[1]];
@@ -1151,7 +1174,7 @@ function allocEditor(a, base, i) {
       var ar = t.closest('[data-add-row]');
       if (ar) { var rg = ar.getAttribute('data-add-row'), src = draft.buffs.filter(function (b) { return (b.group || b.id) === rg; })[0]; if (src) { if (!src.group) src.group = rg; draft.buffs.push({ id: makeBuffId(), group: rg, mode: src.mode, stat: 'punch', percent: '', type: 'buff', layer: src.layer, scope: 'all', source: src.source, label: src.label, enabled: true }); renderEditor(); } return; }
       var gm = t.closest('[data-gmode]');
-      if (gm) { var mg = gm.getAttribute('data-gmode'); draft.buffs.forEach(function (b) { if ((b.group || b.id) === mg) b.mode = gm.getAttribute('data-v'); }); renderEditor(); return; }
+      if (gm) { var mg = gm.getAttribute('data-gmode'), mv = gm.getAttribute('data-v'); draft.buffs.forEach(function (b) { if ((b.group || b.id) === mg) { b.mode = mv; if (mv === 'gradual' && !(parseFloat(b.max) > 0)) b.max = (parseFloat(b.percent) || 0) * 6 || ''; } }); renderEditor(); return; }
       var dg = t.closest('[data-del-group]');
       if (dg) { var xg = dg.getAttribute('data-del-group'); draft.buffs = draft.buffs.filter(function (b) { return (b.group || b.id) !== xg; }); renderEditor(); return; }
       var del = t.closest('[data-del]');
@@ -1307,6 +1330,13 @@ function allocEditor(a, base, i) {
       if (tg && !e.target.closest('[data-tip]')) { abOpen[tg.getAttribute('data-ab-toggle')] = tg.getAttribute('aria-expanded') !== 'true'; renderModal(); return; }   // переключатель режима внутри вкладки «Способности»
       var b = e.target.closest('button[data-abmode]'); if (!b) return;
       view.mode = b.getAttribute('data-abmode'); renderAll();
+    });
+    $('#postCtl').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-post]'); if (!b) return;
+      var v = +b.getAttribute('data-post');
+      view.posts = v === 0 ? 0 : Math.max(0, view.posts + v);
+      if (v > 0 && view.mode !== 'active') view.mode = 'active';
+      renderAll();
     });
     $('#modeSwitch').addEventListener('click', function (e) {
       var b = e.target.closest('button[data-mode]'); if (!b) return;

@@ -590,6 +590,21 @@ test('температура с силой атрибута всё равно н
   const c = kenos([{ stat: 'attrPower', percent: 200, mode: 'passive', layer: 'internal', source: 'attribute' }]); c.abilities = [{ id: 'a', name: 'A', description: '2000 °C', ap: 0 }];
   const t0 = run(c, 'passive').derived.abilities[0].temps[0]; near(t0.value, 5000); assert.ok(t0.capped);
 });
+section('Постепенные бафы (за пост боя)');
+const practice = () => kenos([{ stat: 'attrPower', percent: 20, max: 120, mode: 'gradual', layer: 'internal', source: 'attribute', label: 'Практика' }]);
+test('«Бой — место практики»: +20% силы атрибута за пост, до 120%: пост 3 → 160%', () => {
+  const r = run(practice(), 'active', { posts: 3 }).derived; near(r.mods.attrPower.value, 160); near(r.gradual.list[0].now, 60);
+});
+test('после 6 постов упирается в максимум: пост 10 → 220%, а не 300%', () => {
+  const r = run(practice(), 'active', { posts: 10 }).derived; near(r.mods.attrPower.value, 220); assert.ok(r.gradual.list[0].full);
+});
+test('пост 0 и режим «Пассивные» — постепенный бафф не действует', () => {
+  near(run(practice(), 'active', { posts: 0 }).derived.mods.attrPower.value, 100);
+  near(run(practice(), 'passive', { posts: 5 }).derived.mods.attrPower.value, 100);
+});
+test('постепенный бафф стата: сила удара +10% за пост до 30% → пост 5: 1000 × 1,3', () => {
+  near(run(kenos([{ stat: 'punch', percent: 10, max: 30, mode: 'gradual', layer: 'internal', source: 'trait' }]), 'active', { posts: 5 }).stats.punch.value, 1300);
+});
 section('Лимиты системы статусов');
 test('прочность: множитель прочности внутренними бафами не дальше ×4 (3000 × 5 → 12 000)', () => {
   const r = run(kenos([{ stat: 'durability', percent: 100, mode: 'passive', layer: 'internal', source: 'attribute' }, { stat: 'durability', percent: 150, mode: 'passive', layer: 'internal', source: 'trait' }]), 'passive').derived.durability;
