@@ -176,7 +176,7 @@
    * (реакция — наоборот: во сколько раз быстрее). Шкала логарифмическая, кольца ×1, ×2, ×5, ×10…
    * Заливка — текущий режим, пунктир — базовые статы.
    */
-  var RADAR_KEYS = [['punch', 'Удар'], ['lift', 'Подъём'], ['speed', 'Скорость'], ['reaction', 'Реакция'], ['durability', 'Прочность'], ['stamina', 'Стамина']];
+  var RADAR_KEYS = [['punch', 'Сила удара'], ['lift', 'Подъём'], ['speed', 'Скорость'], ['reaction', 'Реакция']];
   var radarRef = null;
   function radarVals(res) {
     if (!radarRef) { var b = E.compute(blankCharacter(), RULES, { mode: 'base' }); radarRef = { punch: b.stats.punch.value, lift: b.stats.lift.value, speed: b.stats.speed.value, reaction: b.stats.reaction.value, stamina: b.stats.stamina.value, durability: b.derived.durability.value }; }
